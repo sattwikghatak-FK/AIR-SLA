@@ -27,11 +27,11 @@ st.header("Upload Files")
 col1, col2 = st.columns(2)
 with col1:
     # Force CSV for the large file so pandas can chunk it properly
-    file1 = st.file_uploader("1. Upload SLA File (Must be CSV for chunking >10L rows)", type=['csv'])
-    file2 = st.file_uploader("2. Upload MH/DH Network File", type=['csv', 'xlsx'])
+    file1 = st.file_uploader("1. Upload query SLA File (Must be CSV for chunking >10L rows)", type=['csv'])
+    file2 = st.file_uploader("2. Upload MH-DH Network File", type=['csv', 'xlsx'])
 with col2:
-    file3 = st.file_uploader("3. Upload Lane Promise File", type=['csv', 'xlsx'])
-    file4 = st.file_uploader("4. Upload Pincode Target File", type=['csv', 'xlsx'])
+    file3 = st.file_uploader("3. Upload SMH-DMH Network File", type=['csv', 'xlsx'])
+    file4 = st.file_uploader("4. Upload MDM-Pincode mapper File", type=['csv', 'xlsx'])
 
 def load_lookup_data(file, header=0):
     if file.name.endswith('.csv'):
