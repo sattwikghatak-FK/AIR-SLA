@@ -9,6 +9,19 @@ st.set_page_config(page_title="Air SLA Mapper", page_icon="⚡", layout="wide", 
 # --- HIGH-TECH CSS INJECTION ---
 st.markdown("""
     <style>
+    /* Expand Main Container to Edges */
+    .block-container {
+        padding-left: 2rem !important;
+        padding-right: 2rem !important;
+        max-width: 100% !important;
+    }
+
+    /* Force Slimmer Sidebar */
+    section[data-testid="stSidebar"] {
+        width: 260px !important;
+        min-width: 260px !important;
+    }
+
     /* Main Background & Text */
     .stApp {
         background-color: #0b0f19;
@@ -46,7 +59,7 @@ st.markdown("""
 
     /* Secondary Download Buttons */
     .stDownloadButton>button { 
-        width: 100%; 
+        width: 300px; /* Kept compact so it doesn't stretch across the whole screen */
         border-radius: 8px; 
         font-weight: bold; 
         background-color: rgba(255, 255, 255, 0.05);
@@ -78,22 +91,22 @@ st.markdown("""
 
 # --- SIDEBAR: Control Center ---
 with st.sidebar:
-    st.image("https://cdn-icons-png.flaticon.com/512/2000/2000887.png", width=80) # Techy icon
-    st.markdown("## 📡 System Status")
-    st.success("🟢 Engine Online")
-    st.info("🧠 Memory Allocation: Optimal")
+    st.image("https://cdn-icons-png.flaticon.com/512/2000/2000887.png", width=60)
+    st.markdown("## 📡 System")
+    st.success("🟢 Online")
+    st.info("🧠 Mem: Optimal")
     st.markdown("---")
-    st.markdown("### 🛠️ Engine Capabilities")
+    st.markdown("### 🛠️ Engine")
     st.markdown("""
-    - **Chunk Processing:** Active
-    - **VLOOKUP Bypass:** Enabled
-    - **Failsafe Drops:** Enabled
+    - **Chunking:** Active
+    - **Bypass:** Enabled
+    - **Failsafe:** Enabled
     """)
     st.markdown("---")
-    st.caption("Air SLA Mapper v2.0 | Core Routing Engine")
+    st.caption("v2.1 | Core Engine")
 
 # --- MAIN DASHBOARD ---
-st.title("⚡ Air SLA Mapper Engine")
+st.title("⚡ Air SLA Routing Engine")
 st.markdown("_High-performance logistics mapping and SLA calculation core. Please initialize data inputs below._")
 st.divider()
 
@@ -116,7 +129,7 @@ SMH_MAPPING_ORIGINAL = {
 SMH_MAPPING_UPPER = {str(k).strip().upper(): str(v).strip().upper() for k, v in SMH_MAPPING_ORIGINAL.items()}
 
 # --- File Upload Interface ---
-st.subheader("📂 Data Inputs")
+st.subheader("📂 Data Telemetry Inputs")
 col1, col2, col3, col4 = st.columns(4)
 with col1:
     file1 = st.file_uploader("1. SLA Query (CSV)", type=['csv'], help="Massive dataset. Must be CSV.")
@@ -289,27 +302,25 @@ if st.button("🚀 INITIATE PROCESSING SEQUENCE"):
             m3.metric("ROWS FILTERED", f"{total_rows_processed - len(df_clean):,}")
             st.divider()
 
-            # --- Downloads & Previews ---
-            col_down1, col_down2 = st.columns(2)
-            
-            with col_down1:
-                st.markdown("### 🟢 Final AIR Lanes SLA")
-                st.caption("Passed all validation gates. Ready for deployment.")
-                if not df_clean.empty:
-                    csv_clean = df_clean.to_csv(index=False).encode('utf-8')
-                    st.download_button("⬇️ Download Clean Output (CSV)", data=csv_clean, file_name='Air_SLA_Mapper_Clean.csv', mime='text/csv')
-                    with st.expander("Preview Clean Data Stream"):
-                        st.dataframe(df_clean.head(100), use_container_width=True)
-                else:
-                    st.warning("No rows passed the criteria.")
+            # --- Downloads & Previews (STACKED FOR MAX WIDTH) ---
+            st.markdown("### 🟢 Final Clean Payload")
+            st.caption("Passed all validation gates. Ready for deployment.")
+            if not df_clean.empty:
+                csv_clean = df_clean.to_csv(index=False).encode('utf-8')
+                st.download_button("⬇️ Download Clean Output (CSV)", data=csv_clean, file_name='Air_SLA_Mapper_Clean.csv', mime='text/csv', key='btn_clean')
+                with st.expander("Preview Clean Data Stream (Full Width)", expanded=True):
+                    st.dataframe(df_clean.head(100), use_container_width=True)
+            else:
+                st.warning("No rows passed the criteria.")
+                
+            st.markdown("<br>", unsafe_allow_html=True) # Spacer
 
-            with col_down2:
-                st.markdown("### 🔍 Raw Diagnostic Logs")
-                st.caption("100% of data retained. Trace error origins via 'Final_Status' column.")
-                csv_raw = df_raw.to_csv(index=False).encode('utf-8')
-                st.download_button("⬇️ Download Diagnostic Report (CSV)", data=csv_raw, file_name='Air_SLA_Mapper_Diagnostic.csv', mime='text/csv')
-                with st.expander("Preview Raw Data Stream"):
-                    st.dataframe(df_raw.head(100), use_container_width=True)
+            st.markdown("### 🔍 Raw Diagnostic Logs")
+            st.caption("100% of data retained. Trace error origins via 'Final_Status' column.")
+            csv_raw = df_raw.to_csv(index=False).encode('utf-8')
+            st.download_button("⬇️ Download Diagnostic Report (CSV)", data=csv_raw, file_name='Air_SLA_Mapper_Diagnostic.csv', mime='text/csv', key='btn_raw')
+            with st.expander("Preview Raw Data Stream (Full Width)"):
+                st.dataframe(df_raw.head(100), use_container_width=True)
 
         except Exception as e:
             st.error(f"❌ CRITICAL FAILURE: {str(e)}")
