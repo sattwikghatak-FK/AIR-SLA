@@ -1,2 +1,6 @@
 [server]
+# Increases the max upload size to 1000 MB (1 GB)
 maxUploadSize = 1000
+
+# Enables data compression to speed up the WebSocket transfer
+enableWebsocketCompression = true
