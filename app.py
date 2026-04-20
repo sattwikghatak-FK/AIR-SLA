@@ -6,7 +6,7 @@ import time
 # --- Configuration & Branding ---
 st.set_page_config(page_title="Air SLA Mapper", page_icon="⚡", layout="wide", initial_sidebar_state="expanded")
 
-# --- HIGH-TECH CSS INJECTION ---
+# --- HIGH-TECH UI / CYBERPUNK CSS INJECTION ---
 st.markdown("""
     <style>
     /* Expand Main Container to Edges */
@@ -20,11 +20,13 @@ st.markdown("""
     section[data-testid="stSidebar"] {
         width: 260px !important;
         min-width: 260px !important;
+        background-color: #060913 !important;
+        border-right: 1px solid rgba(0, 242, 254, 0.1);
     }
 
-    /* Main Background & Text */
+    /* Deep Space Background */
     .stApp {
-        background-color: #0b0f19;
+        background: radial-gradient(circle at 50% 0%, #111827 0%, #060913 100%);
         color: #e2e8f0;
     }
     
@@ -35,56 +37,118 @@ st.markdown("""
         -webkit-text-fill-color: transparent;
         font-weight: 900 !important;
         text-transform: uppercase;
-        letter-spacing: 2px;
-        text-shadow: 0px 0px 20px rgba(0, 242, 254, 0.3);
+        letter-spacing: 3px;
+        text-shadow: 0px 0px 25px rgba(0, 242, 254, 0.4);
     }
 
-    /* Cyberpunk Button */
+    /* Tech Subheaders with Neon Accent */
+    h2, h3 {
+        border-left: 4px solid #00f2fe;
+        padding-left: 12px !important;
+        text-transform: uppercase;
+        letter-spacing: 2px;
+        color: #e2e8f0 !important;
+        text-shadow: 0 0 10px rgba(0, 242, 254, 0.2);
+    }
+
+    /* Animated Neon Dividers */
+    hr {
+        border: none;
+        height: 1px;
+        background: linear-gradient(90deg, transparent, #00f2fe, transparent);
+        box-shadow: 0 0 10px #00f2fe;
+        opacity: 0.6;
+    }
+
+    /* Glowing File Uploaders */
+    [data-testid="stFileUploadDropzone"] {
+        background-color: rgba(0, 242, 254, 0.02) !important;
+        border: 1px dashed rgba(0, 242, 254, 0.4) !important;
+        border-radius: 12px !important;
+        transition: all 0.3s ease-in-out;
+    }
+    [data-testid="stFileUploadDropzone"]:hover {
+        background-color: rgba(0, 242, 254, 0.08) !important;
+        border: 1px solid #00f2fe !important;
+        box-shadow: 0 0 15px rgba(0, 242, 254, 0.3) !important;
+        transform: scale(1.02);
+    }
+
+    /* Primary Cyberpunk Button */
     .stButton>button {
         width: 100%; 
         border-radius: 8px; 
-        font-weight: 800; 
+        font-weight: 900; 
+        font-size: 1.1rem;
         background: linear-gradient(90deg, #00C9FF 0%, #92FE9D 100%);
-        color: #000000;
+        color: #000000 !important;
         border: none;
-        box-shadow: 0 0 15px rgba(0, 201, 255, 0.4);
+        box-shadow: 0 0 20px rgba(0, 201, 255, 0.5);
         transition: all 0.3s ease-in-out;
         text-transform: uppercase;
-        letter-spacing: 1px;
+        letter-spacing: 2px;
     }
     .stButton>button:hover { 
-        box-shadow: 0 0 25px rgba(0, 201, 255, 0.8);
-        transform: translateY(-2px);
+        box-shadow: 0 0 35px rgba(0, 201, 255, 0.9);
+        transform: translateY(-3px);
     }
 
     /* Secondary Download Buttons */
     .stDownloadButton>button { 
-        width: 300px; /* Kept compact so it doesn't stretch across the whole screen */
-        border-radius: 8px; 
+        width: 300px;
+        border-radius: 6px; 
         font-weight: bold; 
-        background-color: rgba(255, 255, 255, 0.05);
-        color: #00f2fe;
+        background-color: rgba(0, 242, 254, 0.05);
+        color: #00f2fe !important;
         border: 1px solid #00f2fe;
+        box-shadow: 0 0 10px rgba(0, 242, 254, 0.1);
         transition: 0.3s;
+        text-transform: uppercase;
+        letter-spacing: 1px;
     }
     .stDownloadButton>button:hover {
         background-color: #00f2fe;
-        color: #000;
-        box-shadow: 0 0 15px #00f2fe;
+        color: #000 !important;
+        box-shadow: 0 0 20px #00f2fe;
     }
 
-    /* Glassmorphism Metric Cards */
+    /* Glassmorphism Metric Panels */
+    [data-testid="metric-container"] {
+        background: rgba(0, 242, 254, 0.03);
+        border: 1px solid rgba(0, 242, 254, 0.2);
+        border-radius: 12px;
+        padding: 15px 20px;
+        box-shadow: inset 0 0 20px rgba(0, 242, 254, 0.05), 0 4px 15px rgba(0,0,0,0.3);
+        backdrop-filter: blur(10px);
+        transition: transform 0.3s ease;
+    }
+    [data-testid="metric-container"]:hover {
+        transform: translateY(-5px);
+        border: 1px solid rgba(0, 242, 254, 0.5);
+        box-shadow: inset 0 0 20px rgba(0, 242, 254, 0.1), 0 8px 25px rgba(0,242,254,0.2);
+    }
     [data-testid="stMetricValue"] {
-        color: #00f2fe;
+        color: #00f2fe !important;
         font-weight: 900;
-        font-size: 2.5rem;
-        text-shadow: 0 0 10px rgba(0,242,254,0.5);
+        font-size: 3rem;
+        text-shadow: 0 0 15px rgba(0,242,254,0.6);
+        font-family: 'Courier New', Courier, monospace;
     }
     [data-testid="stMetricLabel"] {
-        color: #a0aec0;
-        font-size: 1.1rem;
-        font-weight: 600;
+        color: #a0aec0 !important;
+        font-size: 1rem;
+        font-weight: 700;
         text-transform: uppercase;
+        letter-spacing: 1.5px;
+    }
+    
+    /* Expander Styling */
+    .streamlit-expanderHeader {
+        background-color: rgba(255,255,255,0.02) !important;
+        border-radius: 5px;
+        border: 1px solid rgba(255,255,255,0.05);
+        font-family: 'Courier New', Courier, monospace;
+        color: #4facfe !important;
     }
     </style>
 """, unsafe_allow_html=True)
@@ -96,19 +160,19 @@ with st.sidebar:
     st.success("🟢 Online")
     st.info("🧠 Mem: Optimal")
     st.markdown("---")
-    st.markdown("### 🛠️ Engine")
+    st.markdown("### 🛠️ Engine Rules")
     st.markdown("""
     - **Chunking:** Active
     - **Bypass:** Enabled
     - **Failsafe:** Enabled
     """)
     st.markdown("---")
-    st.caption("v2.1 | Core Engine")
+    st.caption("v2.5 | Core Engine")
 
 # --- MAIN DASHBOARD ---
 st.title("⚡ Air SLA Mapper Engine")
 st.markdown("_High-performance logistics mapping and SLA calculation core. Please initialize data inputs below._")
-st.divider()
+st.markdown("<hr>", unsafe_allow_html=True)
 
 # --- Dictionaries ---
 SMH_MAPPING_ORIGINAL = {
@@ -163,7 +227,7 @@ def clean_pincode(series):
     return pd.to_numeric(series, errors='coerce').fillna(0).astype(int).astype(str)
 
 # --- Main Processing Block ---
-st.divider()
+st.markdown("<hr>", unsafe_allow_html=True)
 
 if st.button("🚀 INITIATE PROCESSING SEQUENCE"):
     
@@ -300,7 +364,7 @@ if st.button("🚀 INITIATE PROCESSING SEQUENCE"):
             m1.metric("TOTAL ROWS PROCESSED", f"{total_rows_processed:,}")
             m2.metric("VALID ROWS KEPT", f"{len(df_clean):,}")
             m3.metric("ROWS FILTERED", f"{total_rows_processed - len(df_clean):,}")
-            st.divider()
+            st.markdown("<hr>", unsafe_allow_html=True)
 
             # --- Downloads & Previews (STACKED FOR MAX WIDTH) ---
             st.markdown("### 🟢 Final Air SLA Lanes")
