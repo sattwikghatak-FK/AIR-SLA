@@ -96,7 +96,7 @@ if st.button("Process Data") and file1 and file2 and file3 and file4:
                 chunk['ekart_mh_upper'] = chunk['ekart_mh_name'].astype(str).str.strip().str.upper()
                 chunk['dh_upper'] = chunk['dh_name'].astype(str).str.strip().str.upper()
                 
-                # 2. SMH & DMH Mapping (Use #N/A for missing mappings to mimic Excel)
+                # 2. SMH & DMH Mapping
                 chunk['smh'] = chunk['ekart_mh_upper'].map(SMH_MAPPING_UPPER).fillna(chunk['ekart_mh_upper'])
                 chunk['dmh'] = chunk['dh_upper'].map(dh_to_mh).fillna("#N/A")
                 
@@ -104,7 +104,6 @@ if st.button("Process Data") and file1 and file2 and file3 and file4:
                 chunk['zone_from_ekart_mh'] = chunk['ekart_mh_upper'].map(mh_to_zone).fillna("#N/A")
                 chunk['zone_from_smh'] = chunk['smh'].map(mh_to_zone).fillna("#N/A")
                 
-                # Final Source Zone: Use SMH mapping first. If #N/A, fallback to Ekart_MH mapping.
                 chunk['source zone'] = np.where(
                     chunk['zone_from_smh'] != "#N/A", 
                     chunk['zone_from_smh'], 
@@ -113,8 +112,19 @@ if st.button("Process Data") and file1 and file2 and file3 and file4:
 
                 chunk['dest zone'] = chunk['dmh'].map(mh_to_zone).fillna("#N/A")
                 
-                # 4. Lane Mapping
-                chunk['lane'] = chunk['smh'] + "-" + chunk['dmh']
+                # 4. Lane Mapping with Fallback Logic
+                chunk['lane_from_smh'] = chunk['smh'] + "-" + chunk['dmh']
+                chunk['lane_from_ekart_mh'] = chunk['ekart_mh_upper'] + "-" + chunk['dmh']
+                
+                chunk['check_valid_lane_smh'] = chunk['lane_from_smh'].isin(valid_lanes)
+                chunk['check_valid_lane_ekart_mh'] = chunk['lane_from_ekart_mh'].isin(valid_lanes)
+                
+                # Final Lane: Use SMH lane if valid, else default to Ekart_MH lane
+                chunk['lane'] = np.where(
+                    chunk['check_valid_lane_smh'], 
+                    chunk['lane_from_smh'], 
+                    chunk['lane_from_ekart_mh']
+                )
                 
                 # 5. Pincode Formatting
                 chunk['pincode_formatted'] = clean_pincode(chunk['pincode'])
@@ -122,7 +132,7 @@ if st.button("Process Data") and file1 and file2 and file3 and file4:
                 # --- DIAGNOSTIC FLAGS ---
                 chunk['check_zone_mapped'] = (chunk['source zone'] != "#N/A") & (chunk['dest zone'] != "#N/A")
                 chunk['check_is_interzone'] = chunk['source zone'] != chunk['dest zone']
-                chunk['check_valid_lane'] = chunk['lane'].isin(valid_lanes)
+                chunk['check_valid_lane'] = chunk['check_valid_lane_smh'] | chunk['check_valid_lane_ekart_mh']
                 chunk['check_valid_pincode'] = chunk['pincode_formatted'].isin(valid_pincodes)
 
                 # Determine final status for each row
@@ -149,9 +159,10 @@ if st.button("Process Data") and file1 and file2 and file3 and file4:
                 # Build Clean Dataframe
                 df_clean = pd.concat(processed_clean_chunks, ignore_index=True) if processed_clean_chunks else pd.DataFrame()
                 if not df_clean.empty:
-                    # Drop diagnostic columns from the clean output (using lowercase keys as pandas is case-sensitive)
+                    # Drop all diagnostic and intermediate columns from the clean output
                     cols_to_drop = [
                         'ekart_mh_upper', 'dh_upper', 'zone_from_ekart_mh', 'zone_from_smh', 
+                        'lane_from_smh', 'lane_from_ekart_mh', 'check_valid_lane_smh', 'check_valid_lane_ekart_mh',
                         'pincode_formatted', 'check_zone_mapped', 'check_is_interzone', 
                         'check_valid_lane', 'check_valid_pincode', 'final_status'
                     ]
