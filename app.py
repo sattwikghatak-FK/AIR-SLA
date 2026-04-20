@@ -194,16 +194,43 @@ SMH_MAPPING_UPPER = {str(k).strip().upper(): str(v).strip().upper() for k, v in 
 
 # --- File Upload Interface ---
 st.subheader("📂 Data Inputs")
+
+# Injecting a pulsing CSS animation for the warning
+st.markdown("""
+    <style>
+    @keyframes pulse-glow {
+        0% { box-shadow: 0 0 5px rgba(255, 165, 0, 0.2); }
+        50% { box-shadow: 0 0 15px rgba(255, 165, 0, 0.6); }
+        100% { box-shadow: 0 0 5px rgba(255, 165, 0, 0.2); }
+    }
+    .heavy-file-warning {
+        background-color: rgba(255, 165, 0, 0.1);
+        border-left: 4px solid #ffa500;
+        padding: 10px 15px;
+        border-radius: 4px;
+        color: #ffb732;
+        font-family: 'Courier New', Courier, monospace;
+        font-size: 0.85rem;
+        margin-bottom: 10px;
+        animation: pulse-glow 2s infinite;
+    }
+    </style>
+""", unsafe_allow_html=True)
+
 col1, col2, col3, col4 = st.columns(4)
 with col1:
-    file1 = st.file_uploader("1. SLA Query (CSV)", type=['csv'], help="Massive dataset. Must be CSV.")
+    # High-tech warning specifically for the massive SLA file
+    st.markdown('<div class="heavy-file-warning">⚠️ MASSIVE PAYLOAD: 100MB+ files may take 1-3 minutes to transfer. Do NOT close window while circle is spinning.</div>', unsafe_allow_html=True)
+    file1 = st.file_uploader("1. SLA Query (CSV)", type=['csv'])
 with col2:
+    st.markdown("<br><br><br>", unsafe_allow_html=True) # Spacer to align with the warning box in col 1
     file2 = st.file_uploader("2. MH-DH Network", type=['csv', 'xlsx'])
 with col3:
+    st.markdown("<br><br><br>", unsafe_allow_html=True)
     file3 = st.file_uploader("3. Lane SMH-DMH", type=['csv', 'xlsx'])
 with col4:
+    st.markdown("<br><br><br>", unsafe_allow_html=True)
     file4 = st.file_uploader("4. MDM-Pincode", type=['csv', 'xlsx'])
-
 # --- Helper Functions ---
 def read_file_safely(file, expected_cols=None):
     file.seek(0)
