@@ -167,7 +167,7 @@ with st.sidebar:
     - **Failsafe:** Enabled
     """)
     st.markdown("---")
-    st.caption("v2.5 | Core Engine")
+    st.caption("v2.6 | Core Engine")
 
 # --- MAIN DASHBOARD ---
 st.title("⚡ Air SLA Mapper Engine")
@@ -241,26 +241,34 @@ if st.button("🚀 INITIATE PROCESSING SEQUENCE"):
             
             with st.status("🔗 Core Engine Engaged...", expanded=True) as status:
                 
-                st.write("⚙️ Compiling Reference Memory (MH/DH, Lanes, Pincodes)...")
-                # --- Lookup Data Loading ---
+                # --- NEW DATA INGESTION PROGRESS BAR ---
+                ingest_bar = st.progress(0, text="Ingesting Data: Allocating Memory...")
+                
+                st.write("⚙️ Parsing MH-DH Network...")
                 df2 = read_file_safely(file2, expected_cols=['dh name', 'mh name', 'zone'])
                 df2['dh_upper'] = df2['dh name'].astype(str).str.strip().str.upper()
                 df2['mh_upper'] = df2['mh name'].astype(str).str.strip().str.upper()
                 df2['zone_upper'] = df2['zone'].astype(str).str.strip().str.upper()
-
                 df2_clean = df2.dropna(subset=['dh_upper', 'mh_upper'])
                 dh_to_mh = dict(zip(df2_clean['dh_upper'], df2_clean['mh_upper']))
-                
                 df2_zone = df2.dropna(subset=['mh_upper', 'zone_upper'])
                 mh_to_zone = dict(zip(df2_zone['mh_upper'], df2_zone['zone_upper']))
+                ingest_bar.progress(33, text="Ingesting Data: MH-DH Network Loaded")
 
+                st.write("⚙️ Parsing Lane Logic...")
                 df3 = read_file_safely(file3)
                 df3['lane'] = df3['source_facility_id'].astype(str).str.strip().str.upper() + "-" + df3['destination_facility_id'].astype(str).str.strip().str.upper()
                 valid_lanes = set(df3['lane'].dropna().unique())
+                ingest_bar.progress(66, text="Ingesting Data: Lane Network Loaded")
 
+                st.write("⚙️ Parsing MDM Pincodes...")
                 df4 = read_file_safely(file4, expected_cols=['pincode'])
                 df4['pincode_clean'] = clean_pincode(df4['pincode'])
                 valid_pincodes = set(df4['pincode_clean'].unique())
+                ingest_bar.progress(100, text="Ingesting Data: 100% Complete")
+                
+                time.sleep(0.5)
+                ingest_bar.empty() # Remove the ingestion bar once complete
                 
                 st.toast("Reference Memory Compiled. Engaging Heavy Processing.", icon="✅")
 
