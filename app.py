@@ -42,13 +42,13 @@ SMH_MAPPING_UPPER = {str(k).strip().upper(): str(v).strip().upper() for k, v in 
 st.subheader("📂 Data Imports")
 col1, col2, col3, col4 = st.columns(4)
 with col1:
-    file1 = st.file_uploader("1. SLA File (CSV)", type=['csv'], help="Must be a CSV file due to large row count.")
+    file1 = st.file_uploader("1. SLA query File (CSV)", type=['csv'], help="Caution: Must be a CSV file!")
 with col2:
-    file2 = st.file_uploader("2. MH/DH Network", type=['csv', 'xlsx'])
+    file2 = st.file_uploader("2. MH-DH Network file", type=['csv', 'xlsx'])
 with col3:
-    file3 = st.file_uploader("3. Lane Promise", type=['csv', 'xlsx'])
+    file3 = st.file_uploader("3. Lane SMH-DMH network file", type=['csv', 'xlsx'])
 with col4:
-    file4 = st.file_uploader("4. Pincode Target", type=['csv', 'xlsx'])
+    file4 = st.file_uploader("4. MDM-Pincode file", type=['csv', 'xlsx'])
 
 # --- Helper Functions ---
 def read_file_safely(file, expected_cols=None):
