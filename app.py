@@ -100,8 +100,17 @@ if st.button("Process Data") and file1 and file2 and file3 and file4:
                 chunk['smh'] = chunk['ekart_mh_upper'].map(SMH_MAPPING_UPPER).fillna(chunk['ekart_mh_upper'])
                 chunk['dmh'] = chunk['dh_upper'].map(dh_to_mh).fillna("#N/A")
                 
-                # 3. Zone Mapping
-                chunk['source zone'] = chunk['smh'].map(mh_to_zone).fillna("#N/A")
+                # 3. Zone Mapping with Fallback Logic
+                chunk['zone_from_ekart_mh'] = chunk['ekart_mh_upper'].map(mh_to_zone).fillna("#N/A")
+                chunk['zone_from_smh'] = chunk['smh'].map(mh_to_zone).fillna("#N/A")
+                
+                # Final Source Zone: Use SMH mapping first. If #N/A, fallback to Ekart_MH mapping.
+                chunk['source zone'] = np.where(
+                    chunk['zone_from_smh'] != "#N/A", 
+                    chunk['zone_from_smh'], 
+                    chunk['zone_from_ekart_mh']
+                )
+
                 chunk['dest zone'] = chunk['dmh'].map(mh_to_zone).fillna("#N/A")
                 
                 # 4. Lane Mapping
@@ -111,21 +120,21 @@ if st.button("Process Data") and file1 and file2 and file3 and file4:
                 chunk['pincode_formatted'] = clean_pincode(chunk['pincode'])
 
                 # --- DIAGNOSTIC FLAGS ---
-                chunk['Check_Zone_Mapped'] = (chunk['source zone'] != "#N/A") & (chunk['dest zone'] != "#N/A")
-                chunk['Check_Is_Interzone'] = chunk['source zone'] != chunk['dest zone']
-                chunk['Check_Valid_Lane'] = chunk['lane'].isin(valid_lanes)
-                chunk['Check_Valid_Pincode'] = chunk['pincode_formatted'].isin(valid_pincodes)
+                chunk['check_zone_mapped'] = (chunk['source zone'] != "#N/A") & (chunk['dest zone'] != "#N/A")
+                chunk['check_is_interzone'] = chunk['source zone'] != chunk['dest zone']
+                chunk['check_valid_lane'] = chunk['lane'].isin(valid_lanes)
+                chunk['check_valid_pincode'] = chunk['pincode_formatted'].isin(valid_pincodes)
 
                 # Determine final status for each row
-                chunk['Final_Status'] = np.where(
-                    ~chunk['Check_Zone_Mapped'], "Dropped: Missing Zone Mapping (#N/A)",
-                    np.where(~chunk['Check_Is_Interzone'], "Dropped: Same Zone (Not Inter-zone)",
-                    np.where(~chunk['Check_Valid_Lane'], "Dropped: Lane Not in Promise File",
-                    np.where(~chunk['Check_Valid_Pincode'], "Dropped: Pincode Not in Target File", 
+                chunk['final_status'] = np.where(
+                    ~chunk['check_zone_mapped'], "Dropped: Missing Zone Mapping (#N/A)",
+                    np.where(~chunk['check_is_interzone'], "Dropped: Same Zone (Not Inter-zone)",
+                    np.where(~chunk['check_valid_lane'], "Dropped: Lane Not in Promise File",
+                    np.where(~chunk['check_valid_pincode'], "Dropped: Pincode Not in Target File", 
                              "Success: Kept in Final File"))))
 
                 # Split chunks into raw (all data) and clean (only success)
-                clean_chunk = chunk[chunk['Final_Status'] == "Success: Kept in Final File"].copy()
+                clean_chunk = chunk[chunk['final_status'] == "Success: Kept in Final File"].copy()
                 
                 # Keep all rows for the raw output
                 processed_raw_chunks.append(chunk)
@@ -140,7 +149,13 @@ if st.button("Process Data") and file1 and file2 and file3 and file4:
                 # Build Clean Dataframe
                 df_clean = pd.concat(processed_clean_chunks, ignore_index=True) if processed_clean_chunks else pd.DataFrame()
                 if not df_clean.empty:
-                    df_clean.drop(columns=['Ekart_Mh_Upper', 'Dh_Upper', 'Pincode_Formatted', 'Check_Zone_Mapped', 'Check_Is_Interzone', 'Check_Valid_Lane', 'Check_Valid_Pincode', 'Final_Status'], inplace=True, errors='ignore')
+                    # Drop diagnostic columns from the clean output (using lowercase keys as pandas is case-sensitive)
+                    cols_to_drop = [
+                        'ekart_mh_upper', 'dh_upper', 'zone_from_ekart_mh', 'zone_from_smh', 
+                        'pincode_formatted', 'check_zone_mapped', 'check_is_interzone', 
+                        'check_valid_lane', 'check_valid_pincode', 'final_status'
+                    ]
+                    df_clean.drop(columns=cols_to_drop, inplace=True, errors='ignore')
                     df_clean.columns = df_clean.columns.str.title()
 
                 st.success("✅ Processing Complete! You can now download the raw diagnostic file to trace your logic.")
