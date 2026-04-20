@@ -4,20 +4,97 @@ import numpy as np
 import time
 
 # --- Configuration & Branding ---
-st.set_page_config(page_title="Air SLA Mapper", page_icon="✈️", layout="wide")
+st.set_page_config(page_title="Air SLA Mapper", page_icon="⚡", layout="wide", initial_sidebar_state="expanded")
 
-# Custom CSS for a slightly cleaner look
+# --- HIGH-TECH CSS INJECTION ---
 st.markdown("""
     <style>
-    .main { background-color: #f8f9fa; }
-    .stButton>button { width: 100%; border-radius: 5px; font-weight: bold; background-color: #0052cc; color: white; }
-    .stButton>button:hover { background-color: #003d99; color: white; }
-    .stDownloadButton>button { width: 100%; border-radius: 5px; font-weight: bold; }
+    /* Main Background & Text */
+    .stApp {
+        background-color: #0b0f19;
+        color: #e2e8f0;
+    }
+    
+    /* Glowing Title */
+    h1 {
+        background: -webkit-linear-gradient(45deg, #00f2fe, #4facfe);
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+        font-weight: 900 !important;
+        text-transform: uppercase;
+        letter-spacing: 2px;
+        text-shadow: 0px 0px 20px rgba(0, 242, 254, 0.3);
+    }
+
+    /* Cyberpunk Button */
+    .stButton>button {
+        width: 100%; 
+        border-radius: 8px; 
+        font-weight: 800; 
+        background: linear-gradient(90deg, #00C9FF 0%, #92FE9D 100%);
+        color: #000000;
+        border: none;
+        box-shadow: 0 0 15px rgba(0, 201, 255, 0.4);
+        transition: all 0.3s ease-in-out;
+        text-transform: uppercase;
+        letter-spacing: 1px;
+    }
+    .stButton>button:hover { 
+        box-shadow: 0 0 25px rgba(0, 201, 255, 0.8);
+        transform: translateY(-2px);
+    }
+
+    /* Secondary Download Buttons */
+    .stDownloadButton>button { 
+        width: 100%; 
+        border-radius: 8px; 
+        font-weight: bold; 
+        background-color: rgba(255, 255, 255, 0.05);
+        color: #00f2fe;
+        border: 1px solid #00f2fe;
+        transition: 0.3s;
+    }
+    .stDownloadButton>button:hover {
+        background-color: #00f2fe;
+        color: #000;
+        box-shadow: 0 0 15px #00f2fe;
+    }
+
+    /* Glassmorphism Metric Cards */
+    [data-testid="stMetricValue"] {
+        color: #00f2fe;
+        font-weight: 900;
+        font-size: 2.5rem;
+        text-shadow: 0 0 10px rgba(0,242,254,0.5);
+    }
+    [data-testid="stMetricLabel"] {
+        color: #a0aec0;
+        font-size: 1.1rem;
+        font-weight: 600;
+        text-transform: uppercase;
+    }
     </style>
 """, unsafe_allow_html=True)
 
-st.title("✈️ Air SLA Mapper")
-st.markdown("Upload your logistics files below to map SLAs, Zones, and Lanes with precision. The engine will automatically process heavy files in batches to ensure maximum stability.")
+# --- SIDEBAR: Control Center ---
+with st.sidebar:
+    st.image("https://cdn-icons-png.flaticon.com/512/2000/2000887.png", width=80) # Techy icon
+    st.markdown("## 📡 System Status")
+    st.success("🟢 Engine Online")
+    st.info("🧠 Memory Allocation: Optimal")
+    st.markdown("---")
+    st.markdown("### 🛠️ Engine Capabilities")
+    st.markdown("""
+    - **Chunk Processing:** Active
+    - **VLOOKUP Bypass:** Enabled
+    - **Failsafe Drops:** Enabled
+    """)
+    st.markdown("---")
+    st.caption("Air SLA Mapper v2.0 | Core Routing Engine")
+
+# --- MAIN DASHBOARD ---
+st.title("⚡ Air SLA Routing Engine")
+st.markdown("_High-performance logistics mapping and SLA calculation core. Please initialize data inputs below._")
 st.divider()
 
 # --- Dictionaries ---
@@ -39,16 +116,16 @@ SMH_MAPPING_ORIGINAL = {
 SMH_MAPPING_UPPER = {str(k).strip().upper(): str(v).strip().upper() for k, v in SMH_MAPPING_ORIGINAL.items()}
 
 # --- File Upload Interface ---
-st.subheader("📂 Data Imports")
+st.subheader("📂 Data Telemetry Inputs")
 col1, col2, col3, col4 = st.columns(4)
 with col1:
-    file1 = st.file_uploader("1. SLA query File (CSV)", type=['csv'], help="Caution: Must be a CSV file!")
+    file1 = st.file_uploader("1. SLA Query (CSV)", type=['csv'], help="Massive dataset. Must be CSV.")
 with col2:
-    file2 = st.file_uploader("2. MH-DH Network file", type=['csv', 'xlsx'])
+    file2 = st.file_uploader("2. MH-DH Network", type=['csv', 'xlsx'])
 with col3:
-    file3 = st.file_uploader("3. Lane SMH-DMH network file", type=['csv', 'xlsx'])
+    file3 = st.file_uploader("3. Lane SMH-DMH", type=['csv', 'xlsx'])
 with col4:
-    file4 = st.file_uploader("4. MDM-Pincode file", type=['csv', 'xlsx'])
+    file4 = st.file_uploader("4. MDM-Pincode", type=['csv', 'xlsx'])
 
 # --- Helper Functions ---
 def read_file_safely(file, expected_cols=None):
@@ -75,19 +152,19 @@ def clean_pincode(series):
 # --- Main Processing Block ---
 st.divider()
 
-# Only ONE button is defined here
-if st.button("🚀 Run Air SLA Mapper Engine"):
+if st.button("🚀 INITIATE PROCESSING SEQUENCE"):
     
-    # Check if all files are uploaded FIRST
     if not (file1 and file2 and file3 and file4):
-        st.warning("⚠️ Please upload all 4 required files before running the engine.")
+        st.error("⚠️ SYSTEM HALTED: Missing telemetry files. Please upload all 4 datasets.")
     
-    # If all files are present, proceed with processing
     else:
         try:
-            with st.status("Engine Running...", expanded=True) as status:
+            st.toast("Initialization Sequence Started...", icon="⏳")
+            time.sleep(1)
+            
+            with st.status("🔗 Core Engine Engaged...", expanded=True) as status:
                 
-                st.write("⚙️ Loading Reference Data (MH/DH, Lanes, Pincodes)...")
+                st.write("⚙️ Compiling Reference Memory (MH/DH, Lanes, Pincodes)...")
                 # --- Lookup Data Loading ---
                 df2 = read_file_safely(file2, expected_cols=['dh name', 'mh name', 'zone'])
                 df2['dh_upper'] = df2['dh name'].astype(str).str.strip().str.upper()
@@ -107,8 +184,10 @@ if st.button("🚀 Run Air SLA Mapper Engine"):
                 df4 = read_file_safely(file4, expected_cols=['pincode'])
                 df4['pincode_clean'] = clean_pincode(df4['pincode'])
                 valid_pincodes = set(df4['pincode_clean'].unique())
+                
+                st.toast("Reference Memory Compiled. Engaging Heavy Processing.", icon="✅")
 
-                st.write("📊 Crunching Massive SLA File...")
+                st.write("📊 Crunching Massive SLA Payload...")
                 
                 # --- Heavy Processing with Live Progress Bar ---
                 chunk_size = 100000
@@ -120,7 +199,7 @@ if st.button("🚀 Run Air SLA Mapper Engine"):
                 total_bytes = file1.tell()
                 file1.seek(0)
                 
-                progress_bar = st.progress(0, text="Processing SLA chunks: 0%")
+                progress_bar = st.progress(0, text="Data Extractor: 0%")
                 
                 temp_df = pd.read_csv(file1, nrows=0)
                 clean_headers = temp_df.columns.astype(str).str.strip().str.lower().tolist()
@@ -129,7 +208,7 @@ if st.button("🚀 Run Air SLA Mapper Engine"):
                 for chunk in pd.read_csv(file1, chunksize=chunk_size, low_memory=False, names=clean_headers, header=0):
                     current_bytes = file1.tell()
                     progress_pct = min(current_bytes / total_bytes, 1.0)
-                    progress_bar.progress(progress_pct, text=f"Processing SLA chunks: {int(progress_pct*100)}%")
+                    progress_bar.progress(progress_pct, text=f"Data Extractor: {int(progress_pct*100)}%")
                     total_rows_processed += len(chunk)
                     
                     # 1. Exact Excel ROUNDUP Formula
@@ -177,9 +256,8 @@ if st.button("🚀 Run Air SLA Mapper Engine"):
                     processed_raw_chunks.append(chunk)
                     processed_clean_chunks.append(clean_chunk)
 
-                progress_bar.progress(1.0, text="Processing SLA chunks: 100%")
-                st.write("📦 Compiling Final Files...")
-                import time
+                progress_bar.progress(1.0, text="Data Extractor: 100%")
+                st.write("📦 Packaging Final Datasets...")
                 time.sleep(0.5)
                 
                 # --- Compiling Final Files ---
@@ -197,37 +275,41 @@ if st.button("🚀 Run Air SLA Mapper Engine"):
                     df_clean.drop(columns=cols_to_drop, inplace=True, errors='ignore')
                     df_clean.columns = df_clean.columns.str.title()
                 
-                status.update(label="✅ Mapping Complete!", state="complete", expanded=False)
+                status.update(label="✅ Payload Packaged Successfully!", state="complete", expanded=False)
+
+            # Trigger celebratory visual
+            st.balloons()
+            st.toast("System Process Complete!", icon="🎉")
 
             # --- Metrics Dashboard ---
-            st.subheader("📈 Processing Results")
+            st.subheader("📈 Diagnostics Dashboard")
             m1, m2, m3 = st.columns(3)
-            m1.metric("Total Rows Processed", f"{total_rows_processed:,}")
-            m2.metric("Valid Rows Kept (Clean)", f"{len(df_clean):,}")
-            m3.metric("Rows Dropped", f"{total_rows_processed - len(df_clean):,}")
+            m1.metric("TOTAL ROWS PROCESSED", f"{total_rows_processed:,}")
+            m2.metric("VALID ROWS KEPT", f"{len(df_clean):,}")
+            m3.metric("ROWS FILTERED", f"{total_rows_processed - len(df_clean):,}")
             st.divider()
 
             # --- Downloads & Previews ---
             col_down1, col_down2 = st.columns(2)
             
             with col_down1:
-                st.markdown("### 🟢 Final Clean Data")
-                st.caption("Only rows that successfully passed all mapping and validation rules.")
+                st.markdown("### 🟢 Final Clean Payload")
+                st.caption("Passed all validation gates. Ready for deployment.")
                 if not df_clean.empty:
                     csv_clean = df_clean.to_csv(index=False).encode('utf-8')
                     st.download_button("⬇️ Download Clean Output (CSV)", data=csv_clean, file_name='Air_SLA_Mapper_Clean.csv', mime='text/csv')
-                    with st.expander("Preview Clean Data"):
+                    with st.expander("Preview Clean Data Stream"):
                         st.dataframe(df_clean.head(100), use_container_width=True)
                 else:
                     st.warning("No rows passed the criteria.")
 
             with col_down2:
-                st.markdown("### 🔍 Raw Diagnostic Data")
-                st.caption("100% of data retained. Filter by the 'Final_Status' column in Excel to audit drop reasons.")
+                st.markdown("### 🔍 Raw Diagnostic Logs")
+                st.caption("100% of data retained. Trace error origins via 'Final_Status' column.")
                 csv_raw = df_raw.to_csv(index=False).encode('utf-8')
                 st.download_button("⬇️ Download Diagnostic Report (CSV)", data=csv_raw, file_name='Air_SLA_Mapper_Diagnostic.csv', mime='text/csv')
-                with st.expander("Preview Diagnostic Data"):
+                with st.expander("Preview Raw Data Stream"):
                     st.dataframe(df_raw.head(100), use_container_width=True)
 
         except Exception as e:
-            st.error(f"❌ An error occurred during processing: {str(e)}")
+            st.error(f"❌ CRITICAL FAILURE: {str(e)}")
