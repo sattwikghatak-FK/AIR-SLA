@@ -48,7 +48,7 @@ with st.sidebar:
     - **Failsafe:** Enabled
     """)
     st.markdown("---")
-    st.caption("v4.0 | Stateful Core")
+    st.caption("v4.1 | Stateful Core")
 
 # --- MAIN DASHBOARD ---
 st.title("⚡ Air SLA Mapper Engine")
@@ -200,23 +200,15 @@ if st.button("🚀 INITIATE PROCESSING SEQUENCE"):
                     total_clean_rows += len(clean_chunk)
                     total_dropped_rows += len(dropped_chunk)
                     
-                    cols_to_drop = [
-                        'ekart_mh_upper', 'dh_upper', 'zone_from_ekart_mh', 'zone_from_smh', 
-                        'lane_from_smh', 'lane_from_ekart_mh', 'check_valid_lane_smh', 'check_valid_lane_ekart_mh',
-                        'pincode_formatted', 'check_zone_mapped', 'check_is_interzone', 'check_valid_lane', 'check_valid_pincode', 'final_status'
-                    ]
-                    
-                    # 1. Format & Write RAW File (ONLY the Dropped Rows are kept here now)
+                    # 1. Format & Write RAW File (ONLY the Dropped Rows)
                     if not dropped_chunk.empty:
                         dropped_chunk.columns = dropped_chunk.columns.str.title()
-                        # If file doesn't exist, this is the first write, so include headers
                         dropped_chunk.to_csv(raw_csv_path, mode='a', index=False, header=not os.path.exists(raw_csv_path))
                     
-                    # 2. Format & Write CLEAN File
+                    # 2. Format & Write CLEAN File (All backend columns retained now)
                     if not clean_chunk.empty:
-                        clean_chunk_out = clean_chunk.drop(columns=cols_to_drop, errors='ignore')
-                        clean_chunk_out.columns = clean_chunk_out.columns.str.title()
-                        clean_chunk_out.to_csv(clean_csv_path, mode='a', index=False, header=not os.path.exists(clean_csv_path))
+                        clean_chunk.columns = clean_chunk.columns.str.title()
+                        clean_chunk.to_csv(clean_csv_path, mode='a', index=False, header=not os.path.exists(clean_csv_path))
 
                 progress_bar.progress(1.0, text="Data Extractor: 100%")
                 st.write("📦 Packaging Final Datasets...")
@@ -246,7 +238,7 @@ if st.session_state.processed:
 
     # --- Downloads & Previews ---
     st.markdown("### 🟢 Final Air SLA Lanes")
-    st.caption("Passed all validation gates. Clean, processed data with backend columns removed.")
+    st.caption("Passed all validation gates. Data retains all backend diagnostic columns.")
     
     if os.path.exists(clean_csv_path) and st.session_state.total_clean > 0:
         with open(clean_csv_path, "rb") as f:
