@@ -7,6 +7,10 @@ import os
 # --- Configuration & Branding ---
 st.set_page_config(page_title="Air SLA Mapper", page_icon="⚡", layout="wide", initial_sidebar_state="expanded")
 
+# --- Initialize Session State for UI Locking ---
+if 'processed' not in st.session_state:
+    st.session_state.processed = False
+
 # --- HIGH-TECH UI / CYBERPUNK CSS INJECTION ---
 st.markdown("""
     <style>
@@ -44,7 +48,7 @@ with st.sidebar:
     - **Failsafe:** Enabled
     """)
     st.markdown("---")
-    st.caption("v3.0 | Disk Streaming Core")
+    st.caption("v4.0 | Stateful Core")
 
 # --- MAIN DASHBOARD ---
 st.title("⚡ Air SLA Mapper Engine")
@@ -90,13 +94,18 @@ def clean_pincode(series):
 
 st.markdown("<hr>", unsafe_allow_html=True)
 
+# Define File Paths Globally
+clean_csv_path = "Air_SLA_Mapper_Clean.csv"
+raw_csv_path = "Air_SLA_Mapper_Diagnostic.csv"
+
+# --- MAIN ENGINE TRIGGER ---
 if st.button("🚀 INITIATE PROCESSING SEQUENCE"):
     if not (file1 and file2 and file3 and file4):
         st.error("⚠️ SYSTEM HALTED: Missing telemetry files. Please upload all 4 datasets.")
     else:
         try:
-            st.toast("Initialization Sequence Started...", icon="⏳")
-            time.sleep(1)
+            # Reset state for a new run
+            st.session_state.processed = False
             
             with st.status("🔗 Core Engine Engaged...", expanded=True) as status:
                 
@@ -125,12 +134,7 @@ if st.button("🚀 INITIATE PROCESSING SEQUENCE"):
                 
                 time.sleep(0.5)
                 ingest_bar.empty()
-                st.toast("Reference Memory Compiled. Engaging Disk Streaming.", icon="✅")
                 st.write("📊 Crunching Massive SLA Payload (Streaming to Disk)...")
-                
-                # --- FILE PATHS FOR DISK STREAMING ---
-                clean_csv_path = "Air_SLA_Mapper_Clean.csv"
-                raw_csv_path = "Air_SLA_Mapper_Diagnostic.csv"
                 
                 # Delete old files if they exist to start fresh
                 if os.path.exists(clean_csv_path): os.remove(clean_csv_path)
@@ -139,7 +143,7 @@ if st.button("🚀 INITIATE PROCESSING SEQUENCE"):
                 chunk_size = 100000
                 total_rows_processed = 0
                 total_clean_rows = 0
-                is_first_chunk = True
+                total_dropped_rows = 0
                 
                 file1.seek(0, 2)
                 total_bytes = file1.tell()
@@ -188,11 +192,13 @@ if st.button("🚀 INITIATE PROCESSING SEQUENCE"):
                         np.where(~chunk['check_valid_lane'], "Dropped: Lane Not in Promise File",
                         np.where(~chunk['check_valid_pincode'], "Dropped: Pincode Not in Target File", "Success: Kept in Final File"))))
 
-                    # --- DISK WRITING LOGIC ---
+                    # --- SEPARATE CHUNKS ---
                     clean_chunk = chunk[chunk['final_status'] == "Success: Kept in Final File"].copy()
+                    dropped_chunk = chunk[chunk['final_status'] != "Success: Kept in Final File"].copy()
                     
                     total_rows_processed += len(chunk)
                     total_clean_rows += len(clean_chunk)
+                    total_dropped_rows += len(dropped_chunk)
                     
                     cols_to_drop = [
                         'ekart_mh_upper', 'dh_upper', 'zone_from_ekart_mh', 'zone_from_smh', 
@@ -200,57 +206,67 @@ if st.button("🚀 INITIATE PROCESSING SEQUENCE"):
                         'pincode_formatted', 'check_zone_mapped', 'check_is_interzone', 'check_valid_lane', 'check_valid_pincode', 'final_status'
                     ]
                     
-                    # Format Raw
-                    chunk_out = chunk.copy()
-                    chunk_out.columns = chunk_out.columns.str.title()
-                    chunk_out.to_csv(raw_csv_path, mode='a', index=False, header=is_first_chunk)
+                    # 1. Format & Write RAW File (ONLY the Dropped Rows are kept here now)
+                    if not dropped_chunk.empty:
+                        dropped_chunk.columns = dropped_chunk.columns.str.title()
+                        # If file doesn't exist, this is the first write, so include headers
+                        dropped_chunk.to_csv(raw_csv_path, mode='a', index=False, header=not os.path.exists(raw_csv_path))
                     
-                    # Format Clean
-                    clean_chunk_out = clean_chunk.drop(columns=cols_to_drop, errors='ignore')
-                    clean_chunk_out.columns = clean_chunk_out.columns.str.title()
-                    clean_chunk_out.to_csv(clean_csv_path, mode='a', index=False, header=is_first_chunk)
-                    
-                    is_first_chunk = False
+                    # 2. Format & Write CLEAN File
+                    if not clean_chunk.empty:
+                        clean_chunk_out = clean_chunk.drop(columns=cols_to_drop, errors='ignore')
+                        clean_chunk_out.columns = clean_chunk_out.columns.str.title()
+                        clean_chunk_out.to_csv(clean_csv_path, mode='a', index=False, header=not os.path.exists(clean_csv_path))
 
                 progress_bar.progress(1.0, text="Data Extractor: 100%")
                 st.write("📦 Packaging Final Datasets...")
                 time.sleep(0.5)
-                
                 status.update(label="✅ Payload Packaged Successfully!", state="complete", expanded=False)
 
-            st.balloons()
-            st.toast("System Process Complete!", icon="🎉")
-
-            # --- Metrics Dashboard ---
-            st.subheader("📈 Diagnostics Dashboard")
-            m1, m2, m3 = st.columns(3)
-            m1.metric("TOTAL ROWS PROCESSED", f"{total_rows_processed:,}")
-            m2.metric("VALID ROWS KEPT", f"{total_clean_rows:,}")
-            m3.metric("ROWS FILTERED", f"{total_rows_processed - total_clean_rows:,}")
-            st.markdown("<hr>", unsafe_allow_html=True)
-
-            # --- Downloads & Previews ---
-            st.markdown("### 🟢 Final Air SLA Lanes")
-            st.caption("Passed all validation gates. Ready for deployment.")
-            
-            if total_clean_rows > 0:
-                with open(clean_csv_path, "rb") as f:
-                    st.download_button("⬇️ Download Clean Output (CSV)", data=f, file_name='Air_SLA_Mapper_Clean.csv', mime='text/csv', key='btn_clean')
-                with st.expander("Preview Clean Data Stream (Full Width)", expanded=True):
-                    preview_clean = pd.read_csv(clean_csv_path, nrows=100)
-                    st.dataframe(preview_clean, use_container_width=True)
-            else:
-                st.warning("No rows passed the criteria.")
-                
-            st.markdown("<br>", unsafe_allow_html=True)
-
-            st.markdown("### 🔍 Raw Diagnostic Logs")
-            st.caption("100% of data retained. Trace error origins via 'Final_Status' column.")
-            with open(raw_csv_path, "rb") as f:
-                st.download_button("⬇️ Download Diagnostic Report (CSV)", data=f, file_name='Air_SLA_Mapper_Diagnostic.csv', mime='text/csv', key='btn_raw')
-            with st.expander("Preview Raw Data Stream (Full Width)"):
-                preview_raw = pd.read_csv(raw_csv_path, nrows=100)
-                st.dataframe(preview_raw, use_container_width=True)
+            # Save state metrics so UI doesn't disappear
+            st.session_state.processed = True
+            st.session_state.total_rows = total_rows_processed
+            st.session_state.total_clean = total_clean_rows
+            st.session_state.total_dropped = total_dropped_rows
 
         except Exception as e:
             st.error(f"❌ CRITICAL FAILURE: {str(e)}")
+
+# --- POST-PROCESSING UI (This stays visible even after clicking download!) ---
+if st.session_state.processed:
+    st.toast("System Process Complete!", icon="🎉")
+
+    # --- Metrics Dashboard ---
+    st.subheader("📈 Diagnostics Dashboard")
+    m1, m2, m3 = st.columns(3)
+    m1.metric("TOTAL ROWS PROCESSED", f"{st.session_state.total_rows:,}")
+    m2.metric("VALID ROWS KEPT", f"{st.session_state.total_clean:,}")
+    m3.metric("ROWS FILTERED", f"{st.session_state.total_dropped:,}")
+    st.markdown("<hr>", unsafe_allow_html=True)
+
+    # --- Downloads & Previews ---
+    st.markdown("### 🟢 Final Air SLA Lanes")
+    st.caption("Passed all validation gates. Clean, processed data with backend columns removed.")
+    
+    if os.path.exists(clean_csv_path) and st.session_state.total_clean > 0:
+        with open(clean_csv_path, "rb") as f:
+            st.download_button("⬇️ Download Clean Output (CSV)", data=f, file_name='Air_SLA_Mapper_Clean.csv', mime='text/csv', key='btn_clean')
+        with st.expander("Preview Clean Data Stream (Full Width)", expanded=True):
+            preview_clean = pd.read_csv(clean_csv_path, nrows=100)
+            st.dataframe(preview_clean, use_container_width=True)
+    else:
+        st.warning("No rows passed the criteria.")
+        
+    st.markdown("<br>", unsafe_allow_html=True)
+
+    st.markdown("### 🔍 Raw Diagnostic Logs (Filtered Rows Only)")
+    st.caption("Contains **only** the rows that were dropped, with full diagnostic columns so you can audit the rejections.")
+    
+    if os.path.exists(raw_csv_path) and st.session_state.total_dropped > 0:
+        with open(raw_csv_path, "rb") as f:
+            st.download_button("⬇️ Download Diagnostic Report (CSV)", data=f, file_name='Air_SLA_Mapper_Filtered.csv', mime='text/csv', key='btn_raw')
+        with st.expander("Preview Filtered Data Stream (Full Width)"):
+            preview_raw = pd.read_csv(raw_csv_path, nrows=100)
+            st.dataframe(preview_raw, use_container_width=True)
+    else:
+        st.success("Zero rows were filtered out! A perfect run.")
