@@ -3,4 +3,4 @@
 maxUploadSize = 1000
 
 # Enables data compression to speed up the WebSocket transfer
-enableWebsocketCompression = true
+enableWebsocketCompression = false
