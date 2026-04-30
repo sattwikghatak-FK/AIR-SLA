@@ -68,10 +68,15 @@ SMH_MAPPING_UPPER = {str(k).strip().upper(): str(v).strip().upper() for k, v in 
 # --- File Upload Interface ---
 st.subheader("📂 Data Inputs")
 col1, col2, col3, col4 = st.columns(4)
-with col1: file1 = st.file_uploader("1. SLA Query (CSV)", type=['csv'])
-with col2: file2 = st.file_uploader("2. MH-DH Network", type=['csv', 'xlsx'])
-with col3: file3 = st.file_uploader("3. Lane SMH-DMH", type=['csv', 'xlsx'])
-with col4: file4 = st.file_uploader("4. MDM-Pincode", type=['csv', 'xlsx'])
+
+with col1: 
+    file1 = st.file_uploader("1. SLA Query (CSV)", type=['csv'], key="upload_f1")
+with col2: 
+    file2 = st.file_uploader("2. MH-DH Network", type=['csv', 'xlsx'], key="upload_f2")
+with col3: 
+    file3 = st.file_uploader("3. Lane SMH-DMH", type=['csv', 'xlsx'], key="upload_f3")
+with col4: 
+    file4 = st.file_uploader("4. MDM-Pincode", type=['csv', 'xlsx'], key="upload_f4")
 
 def read_file_safely(file, expected_cols=None):
     file.seek(0)
