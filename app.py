@@ -7,15 +7,11 @@ import os
 # --- Configuration & Branding ---
 st.set_page_config(page_title="Air SLA Mapper", page_icon="⚡", layout="wide", initial_sidebar_state="expanded")
 
-# --- Initialize Session State ---
+# --- Initialize Session State for UI Locking ---
 if 'processed' not in st.session_state:
     st.session_state.processed = False
-if 'clean_ready' not in st.session_state:
-    st.session_state.clean_ready = False
-if 'diag_ready' not in st.session_state:
-    st.session_state.diag_ready = False
 
-# --- HIGH-TECH UI / CYBERPUNK CSS ---
+# --- HIGH-TECH UI / CYBERPUNK CSS INJECTION ---
 st.markdown("""
     <style>
     .block-container { padding-left: 2rem !important; padding-right: 2rem !important; max-width: 100% !important; }
@@ -38,7 +34,7 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
-# --- SIDEBAR ---
+# --- SIDEBAR: Control Center ---
 with st.sidebar:
     st.image("https://cdn-icons-png.flaticon.com/512/2000/2000887.png", width=60)
     st.markdown("## 📡 System")
@@ -52,7 +48,7 @@ with st.sidebar:
     - **Failsafe:** Enabled
     """)
     st.markdown("---")
-    st.caption("v4.2 | Fragment-Optimised Core")
+    st.caption("v4.1 | Stateful Core")
 
 # --- MAIN DASHBOARD ---
 st.title("⚡ Air SLA Mapper Engine")
@@ -61,7 +57,7 @@ st.markdown("<hr>", unsafe_allow_html=True)
 
 # --- Dictionaries ---
 SMH_MAPPING_ORIGINAL = {
-    'Motherhub_JKS_GMH': 'MotherHub_FRK', 'MotherHub_YKB_Flex': 'Motherhub_DIC', 'Motherhub_NDC': 'Motherhub_DIC',
+    'Motherhub_JKS_GMH': 'MotherHub_FRK', 'MotherHub_YKB_Flex': 'Motherhub_DIC', 'MotherHub_NDC': 'Motherhub_DIC',
     'Motherhub_ULB': 'Motherhub_ULB', 'Motherhub_SHRTCRT_PRA': 'Motherhub_ULB', 'Motherhub_SAI_4': 'Motherhub_SAI_4',
     'Motherhub_JKS': 'Motherhub_DIC', 'Motherhub_MAL': 'Motherhub_MAL', 'MotherHub_YKB_GMH': 'Motherhub_DIC',
     'Motherhub_SHRTCRT_BRI': 'Motherhub_DIC', 'Motherhub_HRN': 'Motherhub_ULB', 'Motherhub_GGN_GMH2': 'Motherhub_GGN',
@@ -69,11 +65,19 @@ SMH_MAPPING_ORIGINAL = {
 }
 SMH_MAPPING_UPPER = {str(k).strip().upper(): str(v).strip().upper() for k, v in SMH_MAPPING_ORIGINAL.items()}
 
-# --- File output paths ---
-clean_csv_path = "Air_SLA_Mapper_Clean.csv"
-raw_csv_path = "Air_SLA_Mapper_Diagnostic.csv"
+# --- File Upload Interface ---
+st.subheader("📂 Data Inputs")
+col1, col2, col3, col4 = st.columns(4)
 
-# --- Helpers ---
+with col1: 
+    file1 = st.file_uploader("1. SLA Query (CSV)", type=['csv'], key="upload_f1")
+with col2: 
+    file2 = st.file_uploader("2. MH-DH Network", type=['csv', 'xlsx'], key="upload_f2")
+with col3: 
+    file3 = st.file_uploader("3. Lane SMH-DMH", type=['csv', 'xlsx'], key="upload_f3")
+with col4: 
+    file4 = st.file_uploader("4. MDM-Pincode", type=['csv', 'xlsx'], key="upload_f4")
+
 def read_file_safely(file, expected_cols=None):
     file.seek(0)
     is_csv = file.name.endswith('.csv')
@@ -87,103 +91,43 @@ def read_file_safely(file, expected_cols=None):
             df = pd.read_csv(file, header=1, low_memory=False) if is_csv else pd.read_excel(file, header=1)
             df.columns = df.columns.astype(str).str.strip().str.lower()
             still_missing = [c for c in expected_cols_lower if c not in df.columns]
-            if still_missing:
-                raise ValueError(f"Could not find columns: {', '.join(still_missing)}")
+            if still_missing: raise ValueError(f"Could not find columns: {', '.join(still_missing)}")
     return df
 
 def clean_pincode(series):
     return pd.to_numeric(series, errors='coerce').fillna(0).astype(int).astype(str)
 
-
-# ------------------------------------------------------------------
-# CACHED PREVIEW READER
-# Only reads from disk once per file path; subsequent widget interactions
-# (expander toggles, column filters, etc.) return instantly from cache.
-# ------------------------------------------------------------------
-@st.cache_data(show_spinner=False)
-def cached_preview(filepath: str, nrows: int = 100) -> pd.DataFrame:
-    return pd.read_csv(filepath, nrows=nrows)
-
-
-# ------------------------------------------------------------------
-# DOWNLOAD PREPARATION WITH PROGRESS BAR
-# Reads the file from disk in 1 MB chunks while updating a progress bar,
-# then returns the fully-buffered bytes ready for st.download_button.
-# ------------------------------------------------------------------
-def prepare_file_with_progress(filepath: str, label: str) -> bytes:
-    file_size = os.path.getsize(filepath)
-    bar = st.progress(0, text=f"⏳ Preparing {label} — 0%")
-    chunks: list[bytes] = []
-    bytes_read = 0
-    chunk_bytes = 1024 * 1024  # 1 MB
-
-    with open(filepath, "rb") as f:
-        while True:
-            data = f.read(chunk_bytes)
-            if not data:
-                break
-            chunks.append(data)
-            bytes_read += len(data)
-            pct = min(bytes_read / file_size, 1.0)
-            bar.progress(pct, text=f"⏳ Preparing {label} — {int(pct * 100)}%")
-
-    bar.progress(1.0, text=f"✅ {label} ready — click to download")
-    time.sleep(0.4)
-    bar.empty()
-    return b"".join(chunks)
-
-
-# ------------------------------------------------------------------
-# FILE UPLOAD — top-level widgets only; zero processing happens here.
-# Streamlit only reruns this section when a file is added/removed;
-# no heavy work executes on widget interactions elsewhere in the page.
-# ------------------------------------------------------------------
-st.subheader("📂 Data Inputs")
-col1, col2, col3, col4 = st.columns(4)
-with col1:
-    file1 = st.file_uploader("1. SLA Query (CSV)", type=['csv'], key="upload_f1")
-with col2:
-    file2 = st.file_uploader("2. MH-DH Network", type=['csv', 'xlsx'], key="upload_f2")
-with col3:
-    file3 = st.file_uploader("3. Lane SMH-DMH", type=['csv', 'xlsx'], key="upload_f3")
-with col4:
-    file4 = st.file_uploader("4. MDM-Pincode", type=['csv', 'xlsx'], key="upload_f4")
-
 st.markdown("<hr>", unsafe_allow_html=True)
 
-# ------------------------------------------------------------------
-# PROCESSING ENGINE — guarded entirely behind the button click.
-# ------------------------------------------------------------------
+# Define File Paths Globally
+clean_csv_path = "Air_SLA_Mapper_Clean.csv"
+raw_csv_path = "Air_SLA_Mapper_Diagnostic.csv"
+
+# --- MAIN ENGINE TRIGGER ---
 if st.button("🚀 INITIATE PROCESSING SEQUENCE"):
     if not (file1 and file2 and file3 and file4):
         st.error("⚠️ SYSTEM HALTED: Missing telemetry files. Please upload all 4 datasets.")
     else:
         try:
-            # Reset state for a fresh run
+            # Reset state for a new run
             st.session_state.processed = False
-            st.session_state.clean_ready = False
-            st.session_state.diag_ready = False
-
+            
             with st.status("🔗 Core Engine Engaged...", expanded=True) as status:
-
+                
                 ingest_bar = st.progress(0, text="Ingesting Data: Allocating Memory...")
-
+                
                 st.write("⚙️ Parsing MH-DH Network...")
                 df2 = read_file_safely(file2, expected_cols=['dh name', 'mh name', 'zone'])
                 df2['dh_upper'] = df2['dh name'].astype(str).str.strip().str.upper()
                 df2['mh_upper'] = df2['mh name'].astype(str).str.strip().str.upper()
                 df2['zone_upper'] = df2['zone'].astype(str).str.strip().str.upper()
-                dh_to_mh = dict(zip(df2.dropna(subset=['dh_upper', 'mh_upper'])['dh_upper'],
-                                    df2.dropna(subset=['dh_upper', 'mh_upper'])['mh_upper']))
-                mh_to_zone = dict(zip(df2.dropna(subset=['mh_upper', 'zone_upper'])['mh_upper'],
-                                      df2.dropna(subset=['mh_upper', 'zone_upper'])['zone_upper']))
+                dh_to_mh = dict(zip(df2.dropna(subset=['dh_upper', 'mh_upper'])['dh_upper'], df2.dropna(subset=['dh_upper', 'mh_upper'])['mh_upper']))
+                mh_to_zone = dict(zip(df2.dropna(subset=['mh_upper', 'zone_upper'])['mh_upper'], df2.dropna(subset=['mh_upper', 'zone_upper'])['zone_upper']))
                 ingest_bar.progress(33, text="Ingesting Data: MH-DH Network Loaded")
 
                 st.write("⚙️ Parsing Lane Logic...")
                 df3 = read_file_safely(file3)
-                df3['lane'] = (df3['source_facility_id'].astype(str).str.strip().str.upper()
-                               + "-"
-                               + df3['destination_facility_id'].astype(str).str.strip().str.upper())
+                df3['lane'] = df3['source_facility_id'].astype(str).str.strip().str.upper() + "-" + df3['destination_facility_id'].astype(str).str.strip().str.upper()
                 valid_lanes = set(df3['lane'].dropna().unique())
                 ingest_bar.progress(66, text="Ingesting Data: Lane Network Loaded")
 
@@ -192,215 +136,134 @@ if st.button("🚀 INITIATE PROCESSING SEQUENCE"):
                 df4['pincode_clean'] = clean_pincode(df4['pincode'])
                 valid_pincodes = set(df4['pincode_clean'].unique())
                 ingest_bar.progress(100, text="Ingesting Data: 100% Complete")
-
-                time.sleep(0.4)
+                
+                time.sleep(0.5)
                 ingest_bar.empty()
                 st.write("📊 Crunching Massive SLA Payload (Streaming to Disk)...")
+                
+                # Delete old files if they exist to start fresh
+                if os.path.exists(clean_csv_path): os.remove(clean_csv_path)
+                if os.path.exists(raw_csv_path): os.remove(raw_csv_path)
 
-                if os.path.exists(clean_csv_path):
-                    os.remove(clean_csv_path)
-                if os.path.exists(raw_csv_path):
-                    os.remove(raw_csv_path)
-
-                # Bust the cached previews so they re-read the new files
-                cached_preview.clear()
-
-                chunk_size = 100_000
+                chunk_size = 100000
                 total_rows_processed = 0
                 total_clean_rows = 0
                 total_dropped_rows = 0
-
+                
                 file1.seek(0, 2)
                 total_bytes = file1.tell()
                 file1.seek(0)
-
+                
                 progress_bar = st.progress(0, text="Data Extractor: 0%")
                 temp_df = pd.read_csv(file1, nrows=0)
                 clean_headers = temp_df.columns.astype(str).str.strip().str.lower().tolist()
                 file1.seek(0)
 
-                for chunk in pd.read_csv(file1, chunksize=chunk_size, low_memory=False,
-                                         names=clean_headers, header=0):
+                for chunk in pd.read_csv(file1, chunksize=chunk_size, low_memory=False, names=clean_headers, header=0):
                     current_bytes = file1.tell()
                     progress_pct = min(current_bytes / total_bytes, 1.0)
-                    progress_bar.progress(progress_pct,
-                                          text=f"Data Extractor: {int(progress_pct * 100)}%")
-
-                    total_sla   = pd.to_numeric(chunk['total_sla_hrs'], errors='coerce').fillna(0)
-                    f2f_buffer  = pd.to_numeric(chunk['f2f_buffer_sla'], errors='coerce').fillna(0)
-                    chunk['sla in days']    = np.ceil((total_sla - f2f_buffer) / 24)
+                    progress_bar.progress(progress_pct, text=f"Data Extractor: {int(progress_pct*100)}%")
+                    
+                    total_sla = pd.to_numeric(chunk['total_sla_hrs'], errors='coerce').fillna(0)
+                    f2f_buffer = pd.to_numeric(chunk['f2f_buffer_sla'], errors='coerce').fillna(0)
+                    chunk['sla in days'] = np.ceil((total_sla - f2f_buffer) / 24)
                     chunk['ekart_mh_upper'] = chunk['ekart_mh_name'].astype(str).str.strip().str.upper()
-                    chunk['dh_upper']       = chunk['dh_name'].astype(str).str.strip().str.upper()
-
+                    chunk['dh_upper'] = chunk['dh_name'].astype(str).str.strip().str.upper()
+                    
                     chunk['smh'] = chunk['ekart_mh_upper'].map(SMH_MAPPING_UPPER).fillna(chunk['ekart_mh_upper'])
                     chunk['dmh'] = chunk['dh_upper'].map(dh_to_mh).fillna("#N/A")
-
+                    
                     chunk['zone_from_ekart_mh'] = chunk['ekart_mh_upper'].map(mh_to_zone).fillna("#N/A")
-                    chunk['zone_from_smh']       = chunk['smh'].map(mh_to_zone).fillna("#N/A")
-                    chunk['source zone'] = np.where(chunk['zone_from_smh'] != "#N/A",
-                                                    chunk['zone_from_smh'], chunk['zone_from_ekart_mh'])
-                    chunk['dest zone']   = chunk['dmh'].map(mh_to_zone).fillna("#N/A")
-
-                    chunk['lane_from_smh']      = chunk['smh'] + "-" + chunk['dmh']
+                    chunk['zone_from_smh'] = chunk['smh'].map(mh_to_zone).fillna("#N/A")
+                    chunk['source zone'] = np.where(chunk['zone_from_smh'] != "#N/A", chunk['zone_from_smh'], chunk['zone_from_ekart_mh'])
+                    chunk['dest zone'] = chunk['dmh'].map(mh_to_zone).fillna("#N/A")
+                    
+                    chunk['lane_from_smh'] = chunk['smh'] + "-" + chunk['dmh']
                     chunk['lane_from_ekart_mh'] = chunk['ekart_mh_upper'] + "-" + chunk['dmh']
-                    chunk['check_valid_lane_smh']      = chunk['lane_from_smh'].isin(valid_lanes)
+                    chunk['check_valid_lane_smh'] = chunk['lane_from_smh'].isin(valid_lanes)
                     chunk['check_valid_lane_ekart_mh'] = chunk['lane_from_ekart_mh'].isin(valid_lanes)
-                    chunk['lane'] = np.where(chunk['check_valid_lane_smh'],
-                                             chunk['lane_from_smh'], chunk['lane_from_ekart_mh'])
-
+                    chunk['lane'] = np.where(chunk['check_valid_lane_smh'], chunk['lane_from_smh'], chunk['lane_from_ekart_mh'])
+                    
                     chunk['pincode_formatted'] = clean_pincode(chunk['pincode'])
 
-                    chunk['check_zone_mapped']   = (chunk['source zone'] != "#N/A") & (chunk['dest zone'] != "#N/A")
-                    chunk['check_is_interzone']  = chunk['source zone'] != chunk['dest zone']
-                    chunk['check_valid_lane']    = chunk['check_valid_lane_smh'] | chunk['check_valid_lane_ekart_mh']
+                    chunk['check_zone_mapped'] = (chunk['source zone'] != "#N/A") & (chunk['dest zone'] != "#N/A")
+                    chunk['check_is_interzone'] = chunk['source zone'] != chunk['dest zone']
+                    chunk['check_valid_lane'] = chunk['check_valid_lane_smh'] | chunk['check_valid_lane_ekart_mh']
                     chunk['check_valid_pincode'] = chunk['pincode_formatted'].isin(valid_pincodes)
 
                     chunk['final_status'] = np.where(
-                        ~chunk['check_zone_mapped'],   "Dropped: Missing Zone Mapping (#N/A)",
+                        ~chunk['check_zone_mapped'], "Dropped: Missing Zone Mapping (#N/A)",
                         np.where(~chunk['check_is_interzone'], "Dropped: Same Zone (Not Inter-zone)",
-                        np.where(~chunk['check_valid_lane'],   "Dropped: Lane Not in Promise File",
-                        np.where(~chunk['check_valid_pincode'],"Dropped: Pincode Not in Target File",
-                                 "Success: Kept in Final File"))))
+                        np.where(~chunk['check_valid_lane'], "Dropped: Lane Not in Promise File",
+                        np.where(~chunk['check_valid_pincode'], "Dropped: Pincode Not in Target File", "Success: Kept in Final File"))))
 
-                    clean_chunk   = chunk[chunk['final_status'] == "Success: Kept in Final File"].copy()
+                    # --- SEPARATE CHUNKS ---
+                    clean_chunk = chunk[chunk['final_status'] == "Success: Kept in Final File"].copy()
                     dropped_chunk = chunk[chunk['final_status'] != "Success: Kept in Final File"].copy()
-
+                    
                     total_rows_processed += len(chunk)
-                    total_clean_rows     += len(clean_chunk)
-                    total_dropped_rows   += len(dropped_chunk)
-
+                    total_clean_rows += len(clean_chunk)
+                    total_dropped_rows += len(dropped_chunk)
+                    
+                    # 1. Format & Write RAW File (ONLY the Dropped Rows)
                     if not dropped_chunk.empty:
                         dropped_chunk.columns = dropped_chunk.columns.str.title()
-                        dropped_chunk.to_csv(raw_csv_path, mode='a', index=False,
-                                             header=not os.path.exists(raw_csv_path))
-
+                        dropped_chunk.to_csv(raw_csv_path, mode='a', index=False, header=not os.path.exists(raw_csv_path))
+                    
+                    # 2. Format & Write CLEAN File (All backend columns retained now)
                     if not clean_chunk.empty:
                         clean_chunk.columns = clean_chunk.columns.str.title()
-                        clean_chunk.to_csv(clean_csv_path, mode='a', index=False,
-                                           header=not os.path.exists(clean_csv_path))
+                        clean_chunk.to_csv(clean_csv_path, mode='a', index=False, header=not os.path.exists(clean_csv_path))
 
                 progress_bar.progress(1.0, text="Data Extractor: 100%")
                 st.write("📦 Packaging Final Datasets...")
-                time.sleep(0.4)
-                status.update(label="✅ Payload Packaged Successfully!",
-                               state="complete", expanded=False)
+                time.sleep(0.5)
+                status.update(label="✅ Payload Packaged Successfully!", state="complete", expanded=False)
 
-            st.session_state.processed     = True
-            st.session_state.total_rows    = total_rows_processed
-            st.session_state.total_clean   = total_clean_rows
+            # Save state metrics so UI doesn't disappear
+            st.session_state.processed = True
+            st.session_state.total_rows = total_rows_processed
+            st.session_state.total_clean = total_clean_rows
             st.session_state.total_dropped = total_dropped_rows
 
         except Exception as e:
             st.error(f"❌ CRITICAL FAILURE: {str(e)}")
 
-
-# ------------------------------------------------------------------
-# POST-PROCESSING UI — wrapped in @st.fragment
-#
-# Why this eliminates the "buffer on field selection" after processing:
-#   - @st.fragment means clicking any widget INSIDE this block (expander
-#     toggles, column filters, prepare/download buttons) only reruns
-#     THIS fragment, NOT the entire app.
-#   - The file uploaders and processing engine above are completely
-#     unaffected, so no re-parse, no re-read, no re-render of the
-#     heavy sections.
-# ------------------------------------------------------------------
-@st.fragment
-def results_section():
-    if not st.session_state.get('processed'):
-        return
-
+# --- POST-PROCESSING UI (This stays visible even after clicking download!) ---
+if st.session_state.processed:
     st.toast("System Process Complete!", icon="🎉")
 
-    # --- Metrics ---
+    # --- Metrics Dashboard ---
     st.subheader("📈 Diagnostics Dashboard")
     m1, m2, m3 = st.columns(3)
     m1.metric("TOTAL ROWS PROCESSED", f"{st.session_state.total_rows:,}")
-    m2.metric("VALID ROWS KEPT",       f"{st.session_state.total_clean:,}")
-    m3.metric("ROWS FILTERED",         f"{st.session_state.total_dropped:,}")
+    m2.metric("VALID ROWS KEPT", f"{st.session_state.total_clean:,}")
+    m3.metric("ROWS FILTERED", f"{st.session_state.total_dropped:,}")
     st.markdown("<hr>", unsafe_allow_html=True)
 
-    # ── CLEAN FILE ──────────────────────────────────────────────────
+    # --- Downloads & Previews ---
     st.markdown("### 🟢 Final Air SLA Lanes")
-    st.caption("Passed all validation gates. Retains all backend diagnostic columns.")
-
+    st.caption("Passed all validation gates. Data retains all backend diagnostic columns.")
+    
     if os.path.exists(clean_csv_path) and st.session_state.total_clean > 0:
-
-        # Two-step download: prepare → show download button
-        # State key keeps the buffered bytes across fragment reruns
-        if "clean_bytes" not in st.session_state:
-            if st.button("⚙️ Prepare Clean Output for Download", key="prep_clean"):
-                st.session_state.clean_bytes = prepare_file_with_progress(
-                    clean_csv_path, "Clean Output"
-                )
-                st.rerun(scope="fragment")
-        else:
-            st.download_button(
-                "⬇️ Download Clean Output (CSV)",
-                data=st.session_state.clean_bytes,
-                file_name="Air_SLA_Mapper_Clean.csv",
-                mime="text/csv",
-                key="btn_clean",
-                on_click=lambda: st.session_state.pop("clean_bytes", None),
-            )
-
+        with open(clean_csv_path, "rb") as f:
+            st.download_button("⬇️ Download Clean Output (CSV)", data=f, file_name='Air_SLA_Mapper_Clean.csv', mime='text/csv', key='btn_clean')
         with st.expander("Preview Clean Data Stream (Full Width)", expanded=True):
-            # cached_preview returns instantly on repeated expander open/close
-            preview_clean = cached_preview(clean_csv_path, nrows=100)
-            all_cols = preview_clean.columns.tolist()
-            selected_cols = st.multiselect(
-                "Filter columns to display:",
-                options=all_cols,
-                default=all_cols,
-                key="clean_col_filter",
-            )
-            st.dataframe(
-                preview_clean[selected_cols] if selected_cols else preview_clean,
-                use_container_width=True,
-            )
+            preview_clean = pd.read_csv(clean_csv_path, nrows=100)
+            st.dataframe(preview_clean, use_container_width=True)
     else:
         st.warning("No rows passed the criteria.")
-
+        
     st.markdown("<br>", unsafe_allow_html=True)
 
-    # ── DIAGNOSTIC FILE ─────────────────────────────────────────────
     st.markdown("### 🔍 Raw Diagnostic Logs (Filtered Rows Only)")
-    st.caption("Contains **only** the rows that were dropped, with full diagnostic columns.")
-
+    st.caption("Contains **only** the rows that were dropped, with full diagnostic columns so you can audit the rejections.")
+    
     if os.path.exists(raw_csv_path) and st.session_state.total_dropped > 0:
-
-        if "diag_bytes" not in st.session_state:
-            if st.button("⚙️ Prepare Diagnostic Report for Download", key="prep_diag"):
-                st.session_state.diag_bytes = prepare_file_with_progress(
-                    raw_csv_path, "Diagnostic Report"
-                )
-                st.rerun(scope="fragment")
-        else:
-            st.download_button(
-                "⬇️ Download Diagnostic Report (CSV)",
-                data=st.session_state.diag_bytes,
-                file_name="Air_SLA_Mapper_Filtered.csv",
-                mime="text/csv",
-                key="btn_raw",
-                on_click=lambda: st.session_state.pop("diag_bytes", None),
-            )
-
+        with open(raw_csv_path, "rb") as f:
+            st.download_button("⬇️ Download Diagnostic Report (CSV)", data=f, file_name='Air_SLA_Mapper_Filtered.csv', mime='text/csv', key='btn_raw')
         with st.expander("Preview Filtered Data Stream (Full Width)"):
-            preview_raw = cached_preview(raw_csv_path, nrows=100)
-            all_cols_raw = preview_raw.columns.tolist()
-            selected_cols_raw = st.multiselect(
-                "Filter columns to display:",
-                options=all_cols_raw,
-                default=all_cols_raw,
-                key="diag_col_filter",
-            )
-            st.dataframe(
-                preview_raw[selected_cols_raw] if selected_cols_raw else preview_raw,
-                use_container_width=True,
-            )
+            preview_raw = pd.read_csv(raw_csv_path, nrows=100)
+            st.dataframe(preview_raw, use_container_width=True)
     else:
         st.success("Zero rows were filtered out! A perfect run.")
-
-
-# Call the fragment — only this block reruns on internal interactions
-results_section()
