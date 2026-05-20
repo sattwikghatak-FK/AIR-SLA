@@ -61,7 +61,7 @@ SMH_MAPPING_ORIGINAL = {
     'Motherhub_ULB': 'Motherhub_ULB', 'Motherhub_SHRTCRT_PRA': 'Motherhub_ULB', 'Motherhub_SAI_4': 'Motherhub_SAI_4',
     'Motherhub_JKS': 'Motherhub_DIC', 'Motherhub_MAL': 'Motherhub_MAL', 'MotherHub_YKB_GMH': 'Motherhub_DIC',
     'Motherhub_SHRTCRT_BRI': 'Motherhub_DIC', 'Motherhub_HRN': 'Motherhub_ULB', 'Motherhub_GGN_GMH2': 'Motherhub_GGN',
-    'MotherHub_BLR': 'Motherhub_MAL'
+    'MotherHub_BLR': 'Motherhub_MAL','Motherhub_SHRTCRT_PIT': 'Motherhub_DIC'
 }
 SMH_MAPPING_UPPER = {str(k).strip().upper(): str(v).strip().upper() for k, v in SMH_MAPPING_ORIGINAL.items()}
 
