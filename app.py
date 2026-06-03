@@ -48,7 +48,7 @@ with st.sidebar:
     - **Failsafe:** Enabled
     """)
     st.markdown("---")
-    st.caption("v5.0 | Multi-Level Core")
+    st.caption("v5.1 | Multi-Level Core")
 
 # --- MAIN DASHBOARD ---
 st.title("⚡ Air SLA Mapper Engine")
@@ -215,9 +215,15 @@ if st.button("🚀 INITIATE PROCESSING SEQUENCE"):
                         
                         chunk['lane_from_smh'] = chunk['city_from_smh'] + "-" + chunk['dmh']
                         chunk['lane_from_ekart_mh'] = chunk['city_from_ekart_mh'] + "-" + chunk['dmh']
+                        
+                        # Save the resolved City explicitly for output
+                        chunk['Mapped_Source_City'] = np.where(chunk['city_from_smh'] != "#N/A", chunk['city_from_smh'], chunk['city_from_ekart_mh'])
                     else:
                         chunk['lane_from_smh'] = chunk['smh'] + "-" + chunk['dmh']
                         chunk['lane_from_ekart_mh'] = chunk['ekart_mh_upper'] + "-" + chunk['dmh']
+                        
+                        # Populate with N/A so the column structure remains consistent
+                        chunk['Mapped_Source_City'] = "N/A (PH Level Run)"
                     
                     chunk['check_valid_lane_smh'] = chunk['lane_from_smh'].isin(valid_lanes)
                     chunk['check_valid_lane_ekart_mh'] = chunk['lane_from_ekart_mh'].isin(valid_lanes)
@@ -246,24 +252,17 @@ if st.button("🚀 INITIATE PROCESSING SEQUENCE"):
                     total_clean_rows += len(clean_chunk)
                     total_dropped_rows += len(dropped_chunk)
                     
-                    # Setup drop columns for clean file export
-                    cols_to_drop = [
-                        'ekart_mh_upper', 'dh_upper', 'zone_from_ekart_mh', 'zone_from_smh', 
-                        'lane_from_smh', 'lane_from_ekart_mh', 'check_valid_lane_smh', 'check_valid_lane_ekart_mh',
-                        'pincode_formatted', 'check_zone_mapped', 'check_is_interzone', 'check_valid_lane', 'check_valid_pincode', 'final_status',
-                        'city_from_smh', 'city_from_ekart_mh'
-                    ]
+                    # (Note: Removed cols_to_drop array so BOTH files retain 100% of diagnostic columns)
                     
                     # 1. Format & Write RAW File (ONLY the Dropped Rows)
                     if not dropped_chunk.empty:
                         dropped_chunk.columns = dropped_chunk.columns.str.title()
                         dropped_chunk.to_csv(raw_csv_path, mode='a', index=False, header=not os.path.exists(raw_csv_path))
                     
-                    # 2. Format & Write CLEAN File (Drop backend cols)
+                    # 2. Format & Write CLEAN File (All backend columns + Mapped City retained)
                     if not clean_chunk.empty:
-                        clean_chunk_out = clean_chunk.drop(columns=cols_to_drop, errors='ignore')
-                        clean_chunk_out.columns = clean_chunk_out.columns.str.title()
-                        clean_chunk_out.to_csv(clean_csv_path, mode='a', index=False, header=not os.path.exists(clean_csv_path))
+                        clean_chunk.columns = clean_chunk.columns.str.title()
+                        clean_chunk.to_csv(clean_csv_path, mode='a', index=False, header=not os.path.exists(clean_csv_path))
 
                 progress_bar.progress(1.0, text="Data Extractor: 100%")
                 st.write("📦 Packaging Final Datasets...")
@@ -293,7 +292,7 @@ if st.session_state.processed:
 
     # --- Downloads & Previews ---
     st.markdown("### 🟢 Final Air SLA Lanes")
-    st.caption("Passed all validation gates. Clean data output ready for downstream processes.")
+    st.caption("Passed all validation gates. Data retains all backend diagnostic columns, including mapped Source City.")
     
     if os.path.exists(clean_csv_path) and st.session_state.total_clean > 0:
         with open(clean_csv_path, "rb") as f:
