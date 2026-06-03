@@ -48,7 +48,7 @@ with st.sidebar:
     - **Failsafe:** Enabled
     """)
     st.markdown("---")
-    st.caption("v4.1 | Stateful Core")
+    st.caption("v5.0 | Multi-Level Core")
 
 # --- MAIN DASHBOARD ---
 st.title("⚡ Air SLA Mapper Engine")
@@ -66,21 +66,25 @@ SMH_MAPPING_ORIGINAL = {
 SMH_MAPPING_UPPER = {str(k).strip().upper(): str(v).strip().upper() for k, v in SMH_MAPPING_ORIGINAL.items()}
 
 # --- File Upload Interface ---
+st.subheader("⚙️ Operation Configuration")
+operation_level = st.radio("Select Routing Logic Level:", ["PH Level", "City Level"], horizontal=True)
+st.markdown("<br>", unsafe_allow_html=True)
+
 st.subheader("📂 Data Inputs")
 col1, col2, col3, col4 = st.columns(4)
 
 with col1: 
-    file1 = st.file_uploader("1. SLA Query (CSV)", type=['csv'], key="upload_f1")
+    file1 = st.file_uploader("1. SLA Query (CSV)", type=['csv', 'zip'], key="upload_f1")
 with col2: 
-    file2 = st.file_uploader("2. MH-DH Network", type=['csv', 'xlsx'], key="upload_f2")
+    file2 = st.file_uploader("2. MH-DH Network", type=['csv', 'xlsx', 'zip'], key="upload_f2")
 with col3: 
-    file3 = st.file_uploader("3. Lane SMH-DMH", type=['csv', 'xlsx'], key="upload_f3")
+    file3 = st.file_uploader("3. Lane MH-MH", type=['csv', 'xlsx', 'zip'], key="upload_f3")
 with col4: 
-    file4 = st.file_uploader("4. MDM-Pincode", type=['csv', 'xlsx'], key="upload_f4")
+    file4 = st.file_uploader("4. MDM-Pincode", type=['csv', 'xlsx', 'zip'], key="upload_f4")
 
 def read_file_safely(file, expected_cols=None):
     file.seek(0)
-    is_csv = file.name.endswith('.csv')
+    is_csv = file.name.endswith('.csv') or file.name.endswith('.zip')
     df = pd.read_csv(file, header=0, low_memory=False) if is_csv else pd.read_excel(file, header=0)
     df.columns = df.columns.astype(str).str.strip().str.lower()
     if expected_cols:
@@ -116,6 +120,7 @@ if st.button("🚀 INITIATE PROCESSING SEQUENCE"):
                 
                 ingest_bar = st.progress(0, text="Ingesting Data: Allocating Memory...")
                 
+                # 1. Parse MH-DH
                 st.write("⚙️ Parsing MH-DH Network...")
                 df2 = read_file_safely(file2, expected_cols=['dh name', 'mh name', 'zone'])
                 df2['dh_upper'] = df2['dh name'].astype(str).str.strip().str.upper()
@@ -125,12 +130,35 @@ if st.button("🚀 INITIATE PROCESSING SEQUENCE"):
                 mh_to_zone = dict(zip(df2.dropna(subset=['mh_upper', 'zone_upper'])['mh_upper'], df2.dropna(subset=['mh_upper', 'zone_upper'])['zone_upper']))
                 ingest_bar.progress(33, text="Ingesting Data: MH-DH Network Loaded")
 
-                st.write("⚙️ Parsing Lane Logic...")
-                df3 = read_file_safely(file3)
-                df3['lane'] = df3['source_facility_id'].astype(str).str.strip().str.upper() + "-" + df3['destination_facility_id'].astype(str).str.strip().str.upper()
-                valid_lanes = set(df3['lane'].dropna().unique())
+                # 2. Parse Lane Logic (PH vs City Level)
+                st.write(f"⚙️ Parsing Lane Logic ({operation_level})...")
+                
+                if operation_level == "City Level":
+                    df3 = read_file_safely(file3, expected_cols=['source city', 'source_facility_id', 'destination_facility_id'])
+                    df3['source_city_upper'] = df3['source city'].astype(str).str.strip().str.upper()
+                    df3['src_fac_upper'] = df3['source_facility_id'].astype(str).str.strip().str.upper()
+                    df3['dest_fac_upper'] = df3['destination_facility_id'].astype(str).str.strip().str.upper()
+                    
+                    # Create dict mapping MH -> Source City
+                    mh_to_city = dict(zip(df3.dropna(subset=['src_fac_upper', 'source_city_upper'])['src_fac_upper'], 
+                                          df3.dropna(subset=['src_fac_upper', 'source_city_upper'])['source_city_upper']))
+                    
+                    # City Level Lanes: Source City -> Dest Facility
+                    df3['lane'] = df3['source_city_upper'] + "-" + df3['dest_fac_upper']
+                    valid_lanes = set(df3['lane'].dropna().unique())
+                    
+                else:
+                    df3 = read_file_safely(file3, expected_cols=['source_facility_id', 'destination_facility_id'])
+                    df3['src_fac_upper'] = df3['source_facility_id'].astype(str).str.strip().str.upper()
+                    df3['dest_fac_upper'] = df3['destination_facility_id'].astype(str).str.strip().str.upper()
+                    
+                    # PH Level Lanes: Source Facility -> Dest Facility
+                    df3['lane'] = df3['src_fac_upper'] + "-" + df3['dest_fac_upper']
+                    valid_lanes = set(df3['lane'].dropna().unique())
+
                 ingest_bar.progress(66, text="Ingesting Data: Lane Network Loaded")
 
+                # 3. Parse Pincodes
                 st.write("⚙️ Parsing MDM Pincodes...")
                 df4 = read_file_safely(file4, expected_cols=['pincode'])
                 df4['pincode_clean'] = clean_pincode(df4['pincode'])
@@ -164,6 +192,7 @@ if st.button("🚀 INITIATE PROCESSING SEQUENCE"):
                     progress_pct = min(current_bytes / total_bytes, 1.0)
                     progress_bar.progress(progress_pct, text=f"Data Extractor: {int(progress_pct*100)}%")
                     
+                    # Base Processing
                     total_sla = pd.to_numeric(chunk['total_sla_hrs'], errors='coerce').fillna(0)
                     f2f_buffer = pd.to_numeric(chunk['f2f_buffer_sla'], errors='coerce').fillna(0)
                     chunk['sla in days'] = np.ceil((total_sla - f2f_buffer) / 24)
@@ -173,19 +202,31 @@ if st.button("🚀 INITIATE PROCESSING SEQUENCE"):
                     chunk['smh'] = chunk['ekart_mh_upper'].map(SMH_MAPPING_UPPER).fillna(chunk['ekart_mh_upper'])
                     chunk['dmh'] = chunk['dh_upper'].map(dh_to_mh).fillna("#N/A")
                     
+                    # Zone Mapping
                     chunk['zone_from_ekart_mh'] = chunk['ekart_mh_upper'].map(mh_to_zone).fillna("#N/A")
                     chunk['zone_from_smh'] = chunk['smh'].map(mh_to_zone).fillna("#N/A")
                     chunk['source zone'] = np.where(chunk['zone_from_smh'] != "#N/A", chunk['zone_from_smh'], chunk['zone_from_ekart_mh'])
                     chunk['dest zone'] = chunk['dmh'].map(mh_to_zone).fillna("#N/A")
                     
-                    chunk['lane_from_smh'] = chunk['smh'] + "-" + chunk['dmh']
-                    chunk['lane_from_ekart_mh'] = chunk['ekart_mh_upper'] + "-" + chunk['dmh']
+                    # Target Routing Rules Based on Radio Button Selection
+                    if operation_level == "City Level":
+                        chunk['city_from_smh'] = chunk['smh'].map(mh_to_city).fillna("#N/A")
+                        chunk['city_from_ekart_mh'] = chunk['ekart_mh_upper'].map(mh_to_city).fillna("#N/A")
+                        
+                        chunk['lane_from_smh'] = chunk['city_from_smh'] + "-" + chunk['dmh']
+                        chunk['lane_from_ekart_mh'] = chunk['city_from_ekart_mh'] + "-" + chunk['dmh']
+                    else:
+                        chunk['lane_from_smh'] = chunk['smh'] + "-" + chunk['dmh']
+                        chunk['lane_from_ekart_mh'] = chunk['ekart_mh_upper'] + "-" + chunk['dmh']
+                    
                     chunk['check_valid_lane_smh'] = chunk['lane_from_smh'].isin(valid_lanes)
                     chunk['check_valid_lane_ekart_mh'] = chunk['lane_from_ekart_mh'].isin(valid_lanes)
                     chunk['lane'] = np.where(chunk['check_valid_lane_smh'], chunk['lane_from_smh'], chunk['lane_from_ekart_mh'])
                     
+                    # Pincode Cleanup
                     chunk['pincode_formatted'] = clean_pincode(chunk['pincode'])
 
+                    # Validation Gates
                     chunk['check_zone_mapped'] = (chunk['source zone'] != "#N/A") & (chunk['dest zone'] != "#N/A")
                     chunk['check_is_interzone'] = chunk['source zone'] != chunk['dest zone']
                     chunk['check_valid_lane'] = chunk['check_valid_lane_smh'] | chunk['check_valid_lane_ekart_mh']
@@ -205,15 +246,24 @@ if st.button("🚀 INITIATE PROCESSING SEQUENCE"):
                     total_clean_rows += len(clean_chunk)
                     total_dropped_rows += len(dropped_chunk)
                     
+                    # Setup drop columns for clean file export
+                    cols_to_drop = [
+                        'ekart_mh_upper', 'dh_upper', 'zone_from_ekart_mh', 'zone_from_smh', 
+                        'lane_from_smh', 'lane_from_ekart_mh', 'check_valid_lane_smh', 'check_valid_lane_ekart_mh',
+                        'pincode_formatted', 'check_zone_mapped', 'check_is_interzone', 'check_valid_lane', 'check_valid_pincode', 'final_status',
+                        'city_from_smh', 'city_from_ekart_mh'
+                    ]
+                    
                     # 1. Format & Write RAW File (ONLY the Dropped Rows)
                     if not dropped_chunk.empty:
                         dropped_chunk.columns = dropped_chunk.columns.str.title()
                         dropped_chunk.to_csv(raw_csv_path, mode='a', index=False, header=not os.path.exists(raw_csv_path))
                     
-                    # 2. Format & Write CLEAN File (All backend columns retained now)
+                    # 2. Format & Write CLEAN File (Drop backend cols)
                     if not clean_chunk.empty:
-                        clean_chunk.columns = clean_chunk.columns.str.title()
-                        clean_chunk.to_csv(clean_csv_path, mode='a', index=False, header=not os.path.exists(clean_csv_path))
+                        clean_chunk_out = clean_chunk.drop(columns=cols_to_drop, errors='ignore')
+                        clean_chunk_out.columns = clean_chunk_out.columns.str.title()
+                        clean_chunk_out.to_csv(clean_csv_path, mode='a', index=False, header=not os.path.exists(clean_csv_path))
 
                 progress_bar.progress(1.0, text="Data Extractor: 100%")
                 st.write("📦 Packaging Final Datasets...")
@@ -243,7 +293,7 @@ if st.session_state.processed:
 
     # --- Downloads & Previews ---
     st.markdown("### 🟢 Final Air SLA Lanes")
-    st.caption("Passed all validation gates. Data retains all backend diagnostic columns.")
+    st.caption("Passed all validation gates. Clean data output ready for downstream processes.")
     
     if os.path.exists(clean_csv_path) and st.session_state.total_clean > 0:
         with open(clean_csv_path, "rb") as f:
@@ -267,3 +317,4 @@ if st.session_state.processed:
             st.dataframe(preview_raw, use_container_width=True)
     else:
         st.success("Zero rows were filtered out! A perfect run.")
+        
