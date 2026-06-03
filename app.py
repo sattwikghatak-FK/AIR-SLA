@@ -46,16 +46,17 @@ with st.sidebar:
     - **Disk Streaming:** Active
     - **Chunking:** Active
     - **Failsafe:** Enabled
+    - **Auto-Valid DMH:** Active
     """)
     st.markdown("---")
-    st.caption("v5.1 | Multi-Level Core")
+    st.caption("v5.2 | Multi-Level Core")
 
 # --- MAIN DASHBOARD ---
 st.title("⚡ Air SLA Mapper Engine")
 st.markdown("_High-performance logistics mapping and SLA calculation core._")
 st.markdown("<hr>", unsafe_allow_html=True)
 
-# --- Dictionaries ---
+# --- Dictionaries & Lists ---
 SMH_MAPPING_ORIGINAL = {
     'Motherhub_JKS_GMH': 'MotherHub_FRK', 'MotherHub_YKB_Flex': 'Motherhub_DIC', 'MotherHub_NDC': 'Motherhub_DIC',
     'Motherhub_ULB': 'Motherhub_ULB', 'Motherhub_SHRTCRT_PRA': 'Motherhub_ULB', 'Motherhub_SAI_4': 'Motherhub_SAI_4',
@@ -64,6 +65,18 @@ SMH_MAPPING_ORIGINAL = {
     'MotherHub_BLR': 'Motherhub_MAL','Motherhub_SHRTCRT_PIT': 'Motherhub_DIC'
 }
 SMH_MAPPING_UPPER = {str(k).strip().upper(): str(v).strip().upper() for k, v in SMH_MAPPING_ORIGINAL.items()}
+
+# Auto-Valid DMHs (Any lane terminating here is approved regardless of MH-MH file)
+AUTO_VALID_DMHS = {
+    'MotherHub_DIC', 'Motherhub_JKS', 'Motherhub_LKO_BTS', 'Motherhub_VNI_BTS',
+    'Motherhub_HJR', 'MotherHub_JAI_BTS', 'MotherHub_HYP', 'MotherHub_CHG',
+    'Motherhub_ANJ', 'MotherHub_CSK', 'Motherhub_BLR', 'MotherHub_CJB',
+    'Motherhub_COK', 'MotherHub_ULB', 'MotherHub_HRN', 'MotherHub_CUT',
+    'MotherHub_RAC', 'MotherHub_PLS', 'MotherHub_ABD', 'MotherHub_STV',
+    'MotherHub_SAI_4', 'MotherHub_PUNE', 'MotherHub_IDO_BTS', 'MotherHub_NAG_BTS',
+    'MotherHub_SIL'
+}
+AUTO_VALID_DMHS_UPPER = {str(dmh).strip().upper() for dmh in AUTO_VALID_DMHS}
 
 # --- File Upload Interface ---
 st.subheader("⚙️ Operation Configuration")
@@ -235,7 +248,12 @@ if st.button("🚀 INITIATE PROCESSING SEQUENCE"):
                     # Validation Gates
                     chunk['check_zone_mapped'] = (chunk['source zone'] != "#N/A") & (chunk['dest zone'] != "#N/A")
                     chunk['check_is_interzone'] = chunk['source zone'] != chunk['dest zone']
-                    chunk['check_valid_lane'] = chunk['check_valid_lane_smh'] | chunk['check_valid_lane_ekart_mh']
+                    
+                    # Check standard lane validity OR if it's an auto-valid DMH
+                    chunk['check_valid_lane_standard'] = chunk['check_valid_lane_smh'] | chunk['check_valid_lane_ekart_mh']
+                    chunk['is_auto_valid_dmh'] = chunk['dmh'].isin(AUTO_VALID_DMHS_UPPER)
+                    chunk['check_valid_lane'] = chunk['check_valid_lane_standard'] | chunk['is_auto_valid_dmh']
+                    
                     chunk['check_valid_pincode'] = chunk['pincode_formatted'].isin(valid_pincodes)
 
                     chunk['final_status'] = np.where(
@@ -251,8 +269,6 @@ if st.button("🚀 INITIATE PROCESSING SEQUENCE"):
                     total_rows_processed += len(chunk)
                     total_clean_rows += len(clean_chunk)
                     total_dropped_rows += len(dropped_chunk)
-                    
-                    # (Note: Removed cols_to_drop array so BOTH files retain 100% of diagnostic columns)
                     
                     # 1. Format & Write RAW File (ONLY the Dropped Rows)
                     if not dropped_chunk.empty:
@@ -316,4 +332,3 @@ if st.session_state.processed:
             st.dataframe(preview_raw, use_container_width=True)
     else:
         st.success("Zero rows were filtered out! A perfect run.")
-        
