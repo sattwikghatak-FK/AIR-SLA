@@ -44,19 +44,18 @@ with st.sidebar:
     st.markdown("### 🛠️ Engine Rules")
     st.markdown("""
     - **Disk Streaming:** Active
-    - **Chunking:** Active
-    - **Failsafe:** Enabled
-    - **Auto-Valid DMH:** Active
+    - **DMH Alias Mapping:** Active
+    - **City-to-City Fallback:** Active
     """)
     st.markdown("---")
-    st.caption("v5.2 | Multi-Level Core")
+    st.caption("v6.0 | Advanced Routing Core")
 
 # --- MAIN DASHBOARD ---
 st.title("⚡ Air SLA Mapper Engine")
 st.markdown("_High-performance logistics mapping and SLA calculation core._")
 st.markdown("<hr>", unsafe_allow_html=True)
 
-# --- Dictionaries & Lists ---
+# --- Dictionaries ---
 SMH_MAPPING_ORIGINAL = {
     'Motherhub_JKS_GMH': 'MotherHub_FRK', 'MotherHub_YKB_Flex': 'Motherhub_DIC', 'MotherHub_NDC': 'Motherhub_DIC',
     'Motherhub_ULB': 'Motherhub_ULB', 'Motherhub_SHRTCRT_PRA': 'Motherhub_ULB', 'Motherhub_SAI_4': 'Motherhub_SAI_4',
@@ -65,18 +64,6 @@ SMH_MAPPING_ORIGINAL = {
     'MotherHub_BLR': 'Motherhub_MAL','Motherhub_SHRTCRT_PIT': 'Motherhub_DIC'
 }
 SMH_MAPPING_UPPER = {str(k).strip().upper(): str(v).strip().upper() for k, v in SMH_MAPPING_ORIGINAL.items()}
-
-# Auto-Valid DMHs (Any lane terminating here is approved regardless of MH-MH file)
-AUTO_VALID_DMHS = {
-    'MotherHub_DIC', 'Motherhub_JKS', 'Motherhub_LKO_BTS', 'Motherhub_VNI_BTS',
-    'Motherhub_HJR', 'MotherHub_JAI_BTS', 'MotherHub_HYP', 'MotherHub_CHG',
-    'Motherhub_ANJ', 'MotherHub_CSK', 'Motherhub_BLR', 'MotherHub_CJB',
-    'Motherhub_COK', 'MotherHub_ULB', 'MotherHub_HRN', 'MotherHub_CUT',
-    'MotherHub_RAC', 'MotherHub_PLS', 'MotherHub_ABD', 'MotherHub_STV',
-    'MotherHub_SAI_4', 'MotherHub_PUNE', 'MotherHub_IDO_BTS', 'MotherHub_NAG_BTS',
-    'MotherHub_SIL'
-}
-AUTO_VALID_DMHS_UPPER = {str(dmh).strip().upper() for dmh in AUTO_VALID_DMHS}
 
 # --- File Upload Interface ---
 st.subheader("⚙️ Operation Configuration")
@@ -126,9 +113,7 @@ if st.button("🚀 INITIATE PROCESSING SEQUENCE"):
         st.error("⚠️ SYSTEM HALTED: Missing telemetry files. Please upload all 4 datasets.")
     else:
         try:
-            # Reset state for a new run
             st.session_state.processed = False
-            
             with st.status("🔗 Core Engine Engaged...", expanded=True) as status:
                 
                 ingest_bar = st.progress(0, text="Ingesting Data: Allocating Memory...")
@@ -147,18 +132,26 @@ if st.button("🚀 INITIATE PROCESSING SEQUENCE"):
                 st.write(f"⚙️ Parsing Lane Logic ({operation_level})...")
                 
                 if operation_level == "City Level":
-                    df3 = read_file_safely(file3, expected_cols=['source city', 'source_facility_id', 'destination_facility_id'])
+                    df3 = read_file_safely(file3, expected_cols=['source city', 'source_facility_id', 'destination city', 'destination_facility_id'])
                     df3['source_city_upper'] = df3['source city'].astype(str).str.strip().str.upper()
+                    df3['dest_city_upper'] = df3['destination city'].astype(str).str.strip().str.upper()
                     df3['src_fac_upper'] = df3['source_facility_id'].astype(str).str.strip().str.upper()
                     df3['dest_fac_upper'] = df3['destination_facility_id'].astype(str).str.strip().str.upper()
                     
-                    # Create dict mapping MH -> Source City
-                    mh_to_city = dict(zip(df3.dropna(subset=['src_fac_upper', 'source_city_upper'])['src_fac_upper'], 
-                                          df3.dropna(subset=['src_fac_upper', 'source_city_upper'])['source_city_upper']))
+                    # Create dict mapping ANY MH -> its respective City
+                    dict_src = dict(zip(df3.dropna(subset=['src_fac_upper', 'source_city_upper'])['src_fac_upper'], 
+                                        df3.dropna(subset=['src_fac_upper', 'source_city_upper'])['source_city_upper']))
+                    dict_dest = dict(zip(df3.dropna(subset=['dest_fac_upper', 'dest_city_upper'])['dest_fac_upper'], 
+                                         df3.dropna(subset=['dest_fac_upper', 'dest_city_upper'])['dest_city_upper']))
+                    mh_to_city = {**dict_dest, **dict_src} # Merge them into one master mapping
                     
-                    # City Level Lanes: Source City -> Dest Facility
+                    # Target 1: City Level Lanes -> Source City to Dest Facility
                     df3['lane'] = df3['source_city_upper'] + "-" + df3['dest_fac_upper']
                     valid_lanes = set(df3['lane'].dropna().unique())
+                    
+                    # Target 2: City to City Lanes (The Ultimate Fallback)
+                    df3['city_lane'] = df3['source_city_upper'] + "-" + df3['dest_city_upper']
+                    valid_city_lanes = set(df3['city_lane'].dropna().unique())
                     
                 else:
                     df3 = read_file_safely(file3, expected_cols=['source_facility_id', 'destination_facility_id'])
@@ -168,6 +161,7 @@ if st.button("🚀 INITIATE PROCESSING SEQUENCE"):
                     # PH Level Lanes: Source Facility -> Dest Facility
                     df3['lane'] = df3['src_fac_upper'] + "-" + df3['dest_fac_upper']
                     valid_lanes = set(df3['lane'].dropna().unique())
+                    valid_city_lanes = set() # Empty for PH level
 
                 ingest_bar.progress(66, text="Ingesting Data: Lane Network Loaded")
 
@@ -182,7 +176,6 @@ if st.button("🚀 INITIATE PROCESSING SEQUENCE"):
                 ingest_bar.empty()
                 st.write("📊 Crunching Massive SLA Payload (Streaming to Disk)...")
                 
-                # Delete old files if they exist to start fresh
                 if os.path.exists(clean_csv_path): os.remove(clean_csv_path)
                 if os.path.exists(raw_csv_path): os.remove(raw_csv_path)
 
@@ -212,8 +205,12 @@ if st.button("🚀 INITIATE PROCESSING SEQUENCE"):
                     chunk['ekart_mh_upper'] = chunk['ekart_mh_name'].astype(str).str.strip().str.upper()
                     chunk['dh_upper'] = chunk['dh_name'].astype(str).str.strip().str.upper()
                     
+                    # Original Mapping
                     chunk['smh'] = chunk['ekart_mh_upper'].map(SMH_MAPPING_UPPER).fillna(chunk['ekart_mh_upper'])
                     chunk['dmh'] = chunk['dh_upper'].map(dh_to_mh).fillna("#N/A")
+                    
+                    # Alias DMH mapping
+                    chunk['mapped_dmh'] = chunk['dmh'].map(SMH_MAPPING_UPPER).fillna(chunk['dmh'])
                     
                     # Zone Mapping
                     chunk['zone_from_ekart_mh'] = chunk['ekart_mh_upper'].map(mh_to_zone).fillna("#N/A")
@@ -223,24 +220,73 @@ if st.button("🚀 INITIATE PROCESSING SEQUENCE"):
                     
                     # Target Routing Rules Based on Radio Button Selection
                     if operation_level == "City Level":
+                        # Map Origin Cities
                         chunk['city_from_smh'] = chunk['smh'].map(mh_to_city).fillna("#N/A")
                         chunk['city_from_ekart_mh'] = chunk['ekart_mh_upper'].map(mh_to_city).fillna("#N/A")
                         
+                        # Map Dest Cities
+                        chunk['city_from_dmh'] = chunk['dmh'].map(mh_to_city).fillna("#N/A")
+                        chunk['city_from_mapped_dmh'] = chunk['mapped_dmh'].map(mh_to_city).fillna("#N/A")
+                        
+                        # Direct DMH Lanes (City -> Dest Facility)
                         chunk['lane_from_smh'] = chunk['city_from_smh'] + "-" + chunk['dmh']
                         chunk['lane_from_ekart_mh'] = chunk['city_from_ekart_mh'] + "-" + chunk['dmh']
                         
-                        # Save the resolved City explicitly for output
+                        # Mapped Alias DMH Lanes (City -> Dest Facility)
+                        chunk['lane_from_smh_alias'] = chunk['city_from_smh'] + "-" + chunk['mapped_dmh']
+                        chunk['lane_from_ekart_mh_alias'] = chunk['city_from_ekart_mh'] + "-" + chunk['mapped_dmh']
+                        
+                        # Fallback City-to-City Lanes
+                        chunk['city_lane_smh'] = chunk['city_from_smh'] + "-" + chunk['city_from_dmh']
+                        chunk['city_lane_ekart'] = chunk['city_from_ekart_mh'] + "-" + chunk['city_from_dmh']
+                        chunk['city_lane_smh_alias'] = chunk['city_from_smh'] + "-" + chunk['city_from_mapped_dmh']
+                        chunk['city_lane_ekart_alias'] = chunk['city_from_ekart_mh'] + "-" + chunk['city_from_mapped_dmh']
+                        
+                        chunk['check_valid_city_lane'] = (
+                            chunk['city_lane_smh'].isin(valid_city_lanes) |
+                            chunk['city_lane_ekart'].isin(valid_city_lanes) |
+                            chunk['city_lane_smh_alias'].isin(valid_city_lanes) |
+                            chunk['city_lane_ekart_alias'].isin(valid_city_lanes)
+                        )
+                        
+                        # Save the resolved Cities explicitly for diagnostic output
                         chunk['Mapped_Source_City'] = np.where(chunk['city_from_smh'] != "#N/A", chunk['city_from_smh'], chunk['city_from_ekart_mh'])
+                        chunk['Mapped_Dest_City'] = np.where(chunk['city_from_dmh'] != "#N/A", chunk['city_from_dmh'], chunk['city_from_mapped_dmh'])
                     else:
+                        # Direct DMH Lanes
                         chunk['lane_from_smh'] = chunk['smh'] + "-" + chunk['dmh']
                         chunk['lane_from_ekart_mh'] = chunk['ekart_mh_upper'] + "-" + chunk['dmh']
                         
+                        # Mapped Alias DMH Lanes
+                        chunk['lane_from_smh_alias'] = chunk['smh'] + "-" + chunk['mapped_dmh']
+                        chunk['lane_from_ekart_mh_alias'] = chunk['ekart_mh_upper'] + "-" + chunk['mapped_dmh']
+                        
                         # Populate with N/A so the column structure remains consistent
+                        chunk['check_valid_city_lane'] = False
+                        chunk['city_lane_smh'] = "N/A"
                         chunk['Mapped_Source_City'] = "N/A (PH Level Run)"
+                        chunk['Mapped_Dest_City'] = "N/A (PH Level Run)"
                     
+                    # Validation Checks for all possible lane combinations
                     chunk['check_valid_lane_smh'] = chunk['lane_from_smh'].isin(valid_lanes)
                     chunk['check_valid_lane_ekart_mh'] = chunk['lane_from_ekart_mh'].isin(valid_lanes)
-                    chunk['lane'] = np.where(chunk['check_valid_lane_smh'], chunk['lane_from_smh'], chunk['lane_from_ekart_mh'])
+                    chunk['check_valid_lane_smh_alias'] = chunk['lane_from_smh_alias'].isin(valid_lanes)
+                    chunk['check_valid_lane_ekart_mh_alias'] = chunk['lane_from_ekart_mh_alias'].isin(valid_lanes)
+                    
+                    # Set Final Lane column to the first valid hit for diagnostic clarity (including city-to-city fallback)
+                    chunk['lane'] = np.where(chunk['check_valid_lane_smh'], chunk['lane_from_smh'],
+                                    np.where(chunk['check_valid_lane_ekart_mh'], chunk['lane_from_ekart_mh'],
+                                    np.where(chunk['check_valid_lane_smh_alias'], chunk['lane_from_smh_alias'],
+                                    np.where(chunk['check_valid_lane_ekart_mh_alias'], chunk['lane_from_ekart_mh_alias'],
+                                    np.where(chunk['check_valid_city_lane'], chunk['city_lane_smh'],
+                                    chunk['lane_from_ekart_mh']))))) # Ultimate Fallback text
+                    
+                    # Final valid lane gate: True if ANY of the permutations exist, or the city-to-city fallback exists
+                    chunk['check_valid_lane'] = (chunk['check_valid_lane_smh'] | 
+                                                 chunk['check_valid_lane_ekart_mh'] | 
+                                                 chunk['check_valid_lane_smh_alias'] | 
+                                                 chunk['check_valid_lane_ekart_mh_alias'] |
+                                                 chunk['check_valid_city_lane'])
                     
                     # Pincode Cleanup
                     chunk['pincode_formatted'] = clean_pincode(chunk['pincode'])
@@ -248,12 +294,6 @@ if st.button("🚀 INITIATE PROCESSING SEQUENCE"):
                     # Validation Gates
                     chunk['check_zone_mapped'] = (chunk['source zone'] != "#N/A") & (chunk['dest zone'] != "#N/A")
                     chunk['check_is_interzone'] = chunk['source zone'] != chunk['dest zone']
-                    
-                    # Check standard lane validity OR if it's an auto-valid DMH
-                    chunk['check_valid_lane_standard'] = chunk['check_valid_lane_smh'] | chunk['check_valid_lane_ekart_mh']
-                    chunk['is_auto_valid_dmh'] = chunk['dmh'].isin(AUTO_VALID_DMHS_UPPER)
-                    chunk['check_valid_lane'] = chunk['check_valid_lane_standard'] | chunk['is_auto_valid_dmh']
-                    
                     chunk['check_valid_pincode'] = chunk['pincode_formatted'].isin(valid_pincodes)
 
                     chunk['final_status'] = np.where(
@@ -270,12 +310,12 @@ if st.button("🚀 INITIATE PROCESSING SEQUENCE"):
                     total_clean_rows += len(clean_chunk)
                     total_dropped_rows += len(dropped_chunk)
                     
-                    # 1. Format & Write RAW File (ONLY the Dropped Rows)
+                    # 1. Format & Write RAW File
                     if not dropped_chunk.empty:
                         dropped_chunk.columns = dropped_chunk.columns.str.title()
                         dropped_chunk.to_csv(raw_csv_path, mode='a', index=False, header=not os.path.exists(raw_csv_path))
                     
-                    # 2. Format & Write CLEAN File (All backend columns + Mapped City retained)
+                    # 2. Format & Write CLEAN File
                     if not clean_chunk.empty:
                         clean_chunk.columns = clean_chunk.columns.str.title()
                         clean_chunk.to_csv(clean_csv_path, mode='a', index=False, header=not os.path.exists(clean_csv_path))
@@ -308,7 +348,7 @@ if st.session_state.processed:
 
     # --- Downloads & Previews ---
     st.markdown("### 🟢 Final Air SLA Lanes")
-    st.caption("Passed all validation gates. Data retains all backend diagnostic columns, including mapped Source City.")
+    st.caption("Passed all validation gates. Data retains all backend diagnostic columns, including Mapped Source and Dest Cities.")
     
     if os.path.exists(clean_csv_path) and st.session_state.total_clean > 0:
         with open(clean_csv_path, "rb") as f:
