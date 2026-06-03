@@ -45,10 +45,10 @@ with st.sidebar:
     st.markdown("""
     - **Disk Streaming:** Active
     - **DMH Alias Mapping:** Active
-    - **City-to-City Fallback:** Active
+    - **City-to-City Fallback:** Active (Deep Resolve)
     """)
     st.markdown("---")
-    st.caption("v6.0 | Advanced Routing Core")
+    st.caption("v6.1 | Advanced Routing Core")
 
 # --- MAIN DASHBOARD ---
 st.title("⚡ Air SLA Mapper Engine")
@@ -220,38 +220,28 @@ if st.button("🚀 INITIATE PROCESSING SEQUENCE"):
                     
                     # Target Routing Rules Based on Radio Button Selection
                     if operation_level == "City Level":
-                        # Map Origin Cities
+                        # 1. Deep Resolve Origin City
                         chunk['city_from_smh'] = chunk['smh'].map(mh_to_city).fillna("#N/A")
                         chunk['city_from_ekart_mh'] = chunk['ekart_mh_upper'].map(mh_to_city).fillna("#N/A")
+                        chunk['Mapped_Source_City'] = np.where(chunk['city_from_smh'] != "#N/A", chunk['city_from_smh'], chunk['city_from_ekart_mh'])
                         
-                        # Map Dest Cities
+                        # 2. Deep Resolve Dest City (Checking original DMH first, then the Alias DMH)
                         chunk['city_from_dmh'] = chunk['dmh'].map(mh_to_city).fillna("#N/A")
                         chunk['city_from_mapped_dmh'] = chunk['mapped_dmh'].map(mh_to_city).fillna("#N/A")
-                        
-                        # Direct DMH Lanes (City -> Dest Facility)
-                        chunk['lane_from_smh'] = chunk['city_from_smh'] + "-" + chunk['dmh']
-                        chunk['lane_from_ekart_mh'] = chunk['city_from_ekart_mh'] + "-" + chunk['dmh']
-                        
-                        # Mapped Alias DMH Lanes (City -> Dest Facility)
-                        chunk['lane_from_smh_alias'] = chunk['city_from_smh'] + "-" + chunk['mapped_dmh']
-                        chunk['lane_from_ekart_mh_alias'] = chunk['city_from_ekart_mh'] + "-" + chunk['mapped_dmh']
-                        
-                        # Fallback City-to-City Lanes
-                        chunk['city_lane_smh'] = chunk['city_from_smh'] + "-" + chunk['city_from_dmh']
-                        chunk['city_lane_ekart'] = chunk['city_from_ekart_mh'] + "-" + chunk['city_from_dmh']
-                        chunk['city_lane_smh_alias'] = chunk['city_from_smh'] + "-" + chunk['city_from_mapped_dmh']
-                        chunk['city_lane_ekart_alias'] = chunk['city_from_ekart_mh'] + "-" + chunk['city_from_mapped_dmh']
-                        
-                        chunk['check_valid_city_lane'] = (
-                            chunk['city_lane_smh'].isin(valid_city_lanes) |
-                            chunk['city_lane_ekart'].isin(valid_city_lanes) |
-                            chunk['city_lane_smh_alias'].isin(valid_city_lanes) |
-                            chunk['city_lane_ekart_alias'].isin(valid_city_lanes)
-                        )
-                        
-                        # Save the resolved Cities explicitly for diagnostic output
-                        chunk['Mapped_Source_City'] = np.where(chunk['city_from_smh'] != "#N/A", chunk['city_from_smh'], chunk['city_from_ekart_mh'])
                         chunk['Mapped_Dest_City'] = np.where(chunk['city_from_dmh'] != "#N/A", chunk['city_from_dmh'], chunk['city_from_mapped_dmh'])
+                        
+                        # Direct DMH Lanes (Resolved Source City -> Dest Facility)
+                        chunk['lane_from_smh'] = chunk['Mapped_Source_City'] + "-" + chunk['dmh']
+                        chunk['lane_from_ekart_mh'] = chunk['city_from_ekart_mh'] + "-" + chunk['dmh'] # Legacy preserve check
+                        
+                        # Mapped Alias DMH Lanes (Resolved Source City -> Alias Dest Facility)
+                        chunk['lane_from_smh_alias'] = chunk['Mapped_Source_City'] + "-" + chunk['mapped_dmh']
+                        chunk['lane_from_ekart_mh_alias'] = chunk['city_from_ekart_mh'] + "-" + chunk['mapped_dmh'] # Legacy preserve check
+                        
+                        # Ultimate Fallback City-to-City Lanes (Using the purely resolved cities)
+                        chunk['city_lane_master'] = chunk['Mapped_Source_City'] + "-" + chunk['Mapped_Dest_City']
+                        chunk['check_valid_city_lane'] = chunk['city_lane_master'].isin(valid_city_lanes)
+                        
                     else:
                         # Direct DMH Lanes
                         chunk['lane_from_smh'] = chunk['smh'] + "-" + chunk['dmh']
@@ -263,7 +253,7 @@ if st.button("🚀 INITIATE PROCESSING SEQUENCE"):
                         
                         # Populate with N/A so the column structure remains consistent
                         chunk['check_valid_city_lane'] = False
-                        chunk['city_lane_smh'] = "N/A"
+                        chunk['city_lane_master'] = "N/A"
                         chunk['Mapped_Source_City'] = "N/A (PH Level Run)"
                         chunk['Mapped_Dest_City'] = "N/A (PH Level Run)"
                     
@@ -278,7 +268,7 @@ if st.button("🚀 INITIATE PROCESSING SEQUENCE"):
                                     np.where(chunk['check_valid_lane_ekart_mh'], chunk['lane_from_ekart_mh'],
                                     np.where(chunk['check_valid_lane_smh_alias'], chunk['lane_from_smh_alias'],
                                     np.where(chunk['check_valid_lane_ekart_mh_alias'], chunk['lane_from_ekart_mh_alias'],
-                                    np.where(chunk['check_valid_city_lane'], chunk['city_lane_smh'],
+                                    np.where(chunk['check_valid_city_lane'], chunk['city_lane_master'],
                                     chunk['lane_from_ekart_mh']))))) # Ultimate Fallback text
                     
                     # Final valid lane gate: True if ANY of the permutations exist, or the city-to-city fallback exists
